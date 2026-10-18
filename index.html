@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Property Management | Product D</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <p class="eyebrow">PRODUCT D</p>
+      <h1>Property Management</h1>
+      <p>Sign in to manage your property portfolio.</p>
+      <form id="auth-form">
+        <label>Email
+          <input id="auth-email" type="email" required autocomplete="email">
+        </label>
+        <label>Password
+          <input id="auth-password" type="password" required
+                 minlength="8" autocomplete="current-password">
+        </label>
+        <button type="submit" id="auth-submit">Sign in</button>
+      </form>
+      <button type="button" id="signup-button" class="secondary full">
+        Create account
+      </button>
+      <p id="auth-message" class="message" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-icon">P</span>
+        <div><strong>Property OS</strong><small>PRODUCT D · PHASE 2</small></div>
+      </div>
+
+      <nav id="navigation">
+        <button class="nav-item active" data-page="dashboard">Dashboard</button>
+        <button class="nav-item" data-page="owners-group">Owners & Properties</button>
+        <button class="nav-item" data-page="tenants-group">Tenants & Tenancies</button>
+        <button class="nav-item" data-page="finance-group">Finance</button>
+        <button class="nav-item" data-page="reports">Reports & Documents</button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <span class="status-dot"></span> Phase 2 workspace
+        <button id="logout-button" class="secondary full">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">PROPERTY OPERATIONS</p>
+          <h1 id="page-title">Dashboard</h1>
+        </div>
+        <span class="currency">MYR · RM</span>
+      </header>
+
+      <p id="app-message" class="message" aria-live="polite"></p>
+
+      <!-- DASHBOARD PAGE -->
+      <section id="dashboard-page" class="page">
+        <div class="welcome panel">
+          <p class="eyebrow">YOUR PORTFOLIO</p>
+          <h2>Build your property register.</h2>
+          <p>Start by recording your properties, owners and rentable units.</p>
+          <button data-go="properties">Add your first property</button>
+        </div>
+        <!-- RENEWAL REMINDERS NOTIFICATION AREA -->
+        <div id="renewal-alerts-container"></div>
+
+        <div class="stats">
+          <article class="stat-card"><span>Total properties</span><strong id="stat-properties">0</strong></article>
+          <article class="stat-card"><span>Owners</span><strong id="stat-owners">0</strong></article>
+          <article class="stat-card"><span>Rentable units</span><strong id="stat-units">0</strong></article>
+        </div>
+        <div class="panel">
+          <h2>Recent properties</h2>
+          <div id="recent-properties" class="empty">No properties recorded yet.</div>
+        </div>
+      </section>
+
+      <!-- OWNERS & PROPERTIES GROUP CONTAINER -->
+      <section id="owners-group-page" class="page hidden">
+        <div class="section-heading">
+          <div>
+            <h2>Owners & Properties</h2>
+            <p>Manage properties, units, owners and ownership links.</p>
+          </div>
+        </div>
+
+        <div class="toolbar" style="margin-bottom: 24px;">
+          <button data-go="properties">Properties & Units</button>
+          <button data-go="owners" class="secondary">Owners</button>
+          <button data-go="ownership" class="secondary">Ownership Links</button>
+        </div>
+
+        <div class="panel">
+          <p>Select one of the options above to manage Properties & Units, Owners, or Ownership Links.</p>
+        </div>
+      </section>
+
+      <!-- TENANTS & TENANCIES GROUP CONTAINER -->
+      <section id="tenants-group-page" class="page hidden">
+        <div class="section-heading">
+          <div>
+            <h2>Tenants & Tenancies</h2>
+            <p>Tenant profiles, long-term tenancies, agreements, short-term bookings, deposits, and maintenance.</p>
+          </div>
+        </div>
+
+        <div class="toolbar" style="margin-bottom: 24px;">
+          <button data-go="tenants">Tenants</button>
+          <button data-go="tenancies" class="secondary">Long-Term Tenancies</button>
+          <button data-go="agreements" class="secondary">Tenancy Agreements</button>
+          <button data-go="bookings" class="secondary">Short-Term Bookings</button>
+          <button data-go="deposits" class="secondary">Deposits</button>
+          <button data-go="maintenance" class="secondary">Maintenance & Repairs</button>
+        </div>
+
+        <div class="panel">
+          <p>Select one of the options above to manage tenant records, lease agreements, bookings, or maintenance repair tickets.</p>
+        </div>
+      </section>
+
+      <!-- FINANCE GROUP CONTAINER -->
+      <section id="finance-group-page" class="page hidden">
+        <div class="section-heading">
+          <div>
+            <h2>Finance</h2>
+            <p>Rental collections, operational finances, loan installments, and property sales.</p>
+          </div>
+        </div>
+
+        <div class="toolbar" style="margin-bottom: 24px;">
+          <button data-go="finance">Finance Ledger & Slips</button>
+          <button data-go="sales" class="secondary">Property Sales</button>
+        </div>
+
+        <div class="panel">
+          <p>Select Finance Ledger & Slips to record rental, utilities, maintenance, sinking funds, and loan installments.</p>
+        </div>
+      </section>
+
+      <!-- FINANCE LEDGER & SLIPS SUB-PAGE -->
+      <section id="finance-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Finance Ledger & Slips</h2><p>Track rental income, utilities, maintenance bills, sinking fund slips, and loan repayments.</p></div>
+          <button id="new-finance-button">+ Add financial record</button>
+        </div>
+        <div id="finance-form-wrap" class="panel hidden">
+          <h3 id="finance-form-title">Add financial record</h3>
+          <form id="finance-form" class="form-grid">
+            <input type="hidden" id="finance-id">
+            <label class="wide">Property *<select id="finance-property" required></select></label>
+            <label>Record Type *
+              <select id="finance-type" required>
+                <option value="rental_income">Rental Income (+)</option>
+                <option value="utility">Utility Bill (-)</option>
+                <option value="maintenance">Maintenance / Repair (-)</option>
+                <option value="sinking_fund">Sinking Fund Slip (-)</option>
+                <option value="loan_installment">Loan Installment / Repayment (-)</option>
+                <option value="other_expense">Other Expense (-)</option>
+              </select>
+            </label>
+            <label>Amount (RM) *<input id="finance-amount" type="number" min="0" step="0.01" required></label>
+            <label>Transaction Date *<input id="finance-date" type="date" required></label>
+            <label>Reference / Slip No.<input id="finance-ref" placeholder="e.g. Slip #9821 or Receipt ID"></label>
+            <label class="wide">Description / Notes<textarea id="finance-notes" rows="2" placeholder="Details about this slip, bill or collection..."></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save financial record</button>
+              <button type="button" id="cancel-finance" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="finance-list" class="record-list"></div>
+      </section>
+
+      <!-- SUB-PAGES -->
+
+      <!-- PROPERTIES & UNITS SUB-PAGE -->
+      <section id="properties-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Properties</h2><p>Owned properties and properties managed for clients.</p></div>
+          <button id="new-property-button">+ Add property</button>
+        </div>
+        <div class="toolbar">
+          <input id="property-search" placeholder="Search name, address or city">
+          <select id="property-filter">
+            <option value="">All management types</option>
+            <option value="owned">Owned</option>
+            <option value="managed">Externally managed</option>
+          </select>
+        </div>
+        <div id="property-form-wrap" class="panel hidden">
+          <h3 id="property-form-title">Add property</h3>
+          <form id="property-form" class="form-grid">
+            <input type="hidden" id="property-id">
+            <label>Property name *<input id="property-name" required></label>
+            <label>Property type
+              <select id="property-type">
+                <option value="residential">Residential</option>
+                <option value="commercial">Commercial</option>
+                <option value="industrial">Industrial</option>
+                <option value="land">Land</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Management type *
+              <select id="management-type" required>
+                <option value="owned">Owned</option>
+                <option value="managed">Managed for owner</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="property-status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="sold">Sold</option>
+              </select>
+            </label>
+            <label class="wide">Address *<input id="property-address" required></label>
+            <label>City<input id="property-city"></label>
+            <label>State<input id="property-state"></label>
+            <label>Postcode<input id="property-postcode"></label>
+            <label>Purchase price (RM)<input id="purchase-price" type="number" min="0" step="0.01"></label>
+            <label class="wide">Notes<textarea id="property-notes" rows="3"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save property</button>
+              <button type="button" id="cancel-property" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="properties-list" class="record-list"></div>
+
+        <div class="section-heading unit-heading">
+          <div><h2>Rentable units</h2><p>Whole properties, rooms and other units.</p></div>
+          <button id="new-unit-button" class="secondary">+ Add unit</button>
+        </div>
+        <div id="unit-form-wrap" class="panel hidden">
+          <h3 id="unit-form-title">Add unit</h3>
+          <form id="unit-form" class="form-grid">
+            <input type="hidden" id="unit-id">
+            <label class="wide">Property *
+              <select id="unit-property" required></select>
+            </label>
+            <label>Unit name *<input id="unit-name" required placeholder="e.g. Room A-01"></label>
+            <label>Unit type
+              <select id="unit-type">
+                <option value="whole_property">Whole property</option>
+                <option value="room">Room</option>
+                <option value="apartment">Apartment</option>
+                <option value="shop">Shop</option>
+                <option value="office">Office</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="unit-status">
+                <option value="available">Available</option>
+                <option value="occupied">Occupied</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+            <label>Floor area (m²)<input id="unit-area" type="number" min="0.01" step="0.01"></label>
+            <label class="wide">Notes<textarea id="unit-notes" rows="2"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save unit</button>
+              <button type="button" id="cancel-unit" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="units-list" class="record-list"></div>
+      </section>
+
+      <!-- OWNERS SUB-PAGE -->
+      <section id="owners-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Owners</h2><p>Maintain owner and client contact details.</p></div>
+          <button id="new-owner-button">+ Add owner</button>
+        </div>
+        <div id="owner-form-wrap" class="panel hidden">
+          <h3 id="owner-form-title">Add owner</h3>
+          <form id="owner-form" class="form-grid">
+            <input type="hidden" id="owner-id">
+            <label>Owner / company name *<input id="owner-name" required></label>
+            <label>Owner type
+              <select id="owner-type">
+                <option value="individual">Individual</option>
+                <option value="company">Company</option>
+              </select>
+            </label>
+            <label>Phone<input id="owner-phone" type="tel"></label>
+            <label>Email<input id="owner-email" type="email"></label>
+            <label class="wide">Mailing address<input id="owner-address"></label>
+            <label class="wide">Notes<textarea id="owner-notes" rows="3"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save owner</button>
+              <button type="button" id="cancel-owner" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="owners-list" class="record-list"></div>
+      </section>
+
+      <!-- OWNERSHIP LINKS SUB-PAGE -->
+      <section id="ownership-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Ownership links</h2><p>Connect properties to owners, including shared ownership.</p></div>
+          <button id="new-link-button">+ Link owner</button>
+        </div>
+        <div id="link-form-wrap" class="panel hidden">
+          <form id="link-form" class="form-grid">
+            <label class="wide">Property *<select id="link-property" required></select></label>
+            <label class="wide">Owner *<select id="link-owner" required></select></label>
+            <label>Relationship
+              <select id="link-relationship">
+                <option value="owner">Owner</option>
+                <option value="client">Client</option>
+              </select>
+            </label>
+            <label>Ownership share (%)<input id="link-share" type="number" min="0" max="100" step="0.01"></label>
+            <label class="wide">Notes<input id="link-notes"></label>
+            <div class="form-actions wide">
+              <button type="submit">Save link</button>
+              <button type="button" id="cancel-link" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="links-list" class="record-list"></div>
+      </section>
+
+      <!-- TENANTS SUB-PAGE -->
+      <section id="tenants-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Tenants</h2><p>People and companies who rent your units.</p></div>
+          <button id="new-tenant-button">+ Add tenant</button>
+        </div>
+        <div id="tenant-form-wrap" class="panel hidden">
+          <h3 id="tenant-form-title">Add tenant</h3>
+          <form id="tenant-form" class="form-grid">
+            <input type="hidden" id="tenant-id">
+            <label>Tenant / company name *<input id="tenant-name" required></label>
+            <label>Tenant type
+              <select id="tenant-type">
+                <option value="individual">Individual</option>
+                <option value="company">Company</option>
+              </select>
+            </label>
+            <label>Phone<input id="tenant-phone" type="tel"></label>
+            <label>Email<input id="tenant-email" type="email"></label>
+            <label>IC / Passport<input id="tenant-ic"></label>
+            <label class="wide">Mailing address<input id="tenant-address"></label>
+            <label class="wide">Notes<textarea id="tenant-notes" rows="3"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save tenant</button>
+              <button type="button" id="cancel-tenant" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="tenants-list" class="record-list"></div>
+      </section>
+
+      <!-- LONG-TERM TENANCIES SUB-PAGE -->
+      <section id="tenancies-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Long-Term Tenancies</h2><p>Monthly rental agreements linking units and tenants.</p></div>
+          <button id="new-tenancy-button">+ Add tenancy</button>
+        </div>
+        <div id="tenancy-form-wrap" class="panel hidden">
+          <h3 id="tenancy-form-title">Add tenancy</h3>
+          <form id="tenancy-form" class="form-grid">
+            <input type="hidden" id="tenancy-id">
+            <label class="wide">Unit *
+              <select id="tenancy-unit" required></select>
+            </label>
+            <label class="wide">Tenant *
+              <select id="tenancy-tenant" required></select>
+            </label>
+            <label>Start date *<input id="tenancy-start" type="date" required></label>
+            <label>End date<input id="tenancy-end" type="date"></label>
+            <label>Monthly rent (RM) *<input id="tenancy-rent" type="number" min="0" step="0.01" required></label>
+            <label>Rent due day
+              <input id="tenancy-due-day" type="number" min="1" max="28" value="1">
+            </label>
+            <label>Status
+              <select id="tenancy-status">
+                <option value="active">Active</option>
+                <option value="ended">Ended</option>
+                <option value="terminated">Terminated</option>
+              </select>
+            </label>
+            <label class="wide">Notes<textarea id="tenancy-notes" rows="2"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save tenancy</button>
+              <button type="button" id="cancel-tenancy" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="tenancies-list" class="record-list"></div>
+      </section>
+
+
+      <!-- MAINTENANCE & REPAIRS SUB-PAGE -->
+      <section id="maintenance-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Maintenance & Repairs</h2><p>Track repair tickets, emergency fix authorizations, costs, and before/after photos.</p></div>
+          <button id="new-maintenance-button">+ Log repair ticket</button>
+        </div>
+        <div id="maintenance-form-wrap" class="panel hidden">
+          <h3 id="maintenance-form-title">Log Maintenance Ticket</h3>
+          <form id="maintenance-form" class="form-grid">
+            <input type="hidden" id="maintenance-id">
+            <label class="wide">Property & Unit *<select id="maint-unit" required></select></label>
+            <label class="wide">Reporting Tenant / Guest<select id="maint-tenant"></select></label>
+            <label class="wide">Issue Title *<input id="maint-title" required placeholder="e.g. Burst water pipe in master bathroom"></label>
+            <label class="wide">Description<textarea id="maint-desc" rows="3" placeholder="Details of the damage or breakdown..."></textarea></label>
+            <label>Emergency / Urgent Repair?
+              <select id="maint-emergency">
+                <option value="false">Standard Repair</option>
+                <option value="true">🚨 Emergency (Immediate Proceed Authorization)</option>
+              </select>
+            </label>
+            <label>Status
+              <select id="maint-status">
+                <option value="reported">Reported</option>
+                <option value="emergency_approved">Emergency Approved</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label>Actual Cost (RM)<input id="maint-cost" type="number" min="0" step="0.01"></label>
+            <label>Before Photo File
+              <input id="maint-before-file" type="file" accept="image/*">
+              <input type="hidden" id="maint-before">
+            </label>
+            <label class="wide">After Photo File
+              <input id="maint-after-file" type="file" accept="image/*">
+              <input type="hidden" id="maint-after">
+            </label>
+            <div class="form-actions wide">
+              <button type="submit">Save repair ticket</button>
+              <button type="button" id="cancel-maintenance" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="maintenance-list" class="record-list"></div>
+      </section>
+
+
+      <!-- TENANCY AGREEMENTS & DIGITAL SIGNING SUB-PAGE -->
+      <section id="agreements-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Tenancy Agreements</h2><p>Auto-fill lease contracts, preview terms, and collect digital signatures from Landlord & Tenant.</p></div>
+          <button id="new-agreement-button">+ Generate Agreement</button>
+        </div>
+        <div id="agreement-form-wrap" class="panel hidden">
+          <h3 id="agreement-form-title">Generate Tenancy Agreement</h3>
+          <form id="agreement-form" class="form-grid">
+            <input type="hidden" id="agreement-id">
+            <label class="wide">Select Tenancy *
+              <select id="agreement-tenancy" required></select>
+            </label>
+            <label class="wide">Agreement Clauses & Content *
+              <textarea id="agreement-text" rows="10" required></textarea>
+            </label>
+            <div class="form-actions wide">
+              <button type="submit">Save Agreement Draft</button>
+              <button type="button" id="cancel-agreement" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+
+        <!-- Signing Modal / Panel overlay -->
+        <div id="signing-panel" class="panel hidden" style="border: 2px solid var(--blue); margin-bottom: 24px;">
+          <h3>Digital Signature Execution</h3>
+          <p id="signing-info" style="margin-bottom: 12px; color: var(--muted);"></p>
+          <div class="form-grid">
+            <label>Landlord Signature (Full Name)
+              <input id="landlord-sig-input" placeholder="Type Landlord Name as Signature">
+            </label>
+            <label>Tenant Signature (Full Name)
+              <input id="tenant-sig-input" placeholder="Type Tenant Name as Signature">
+            </label>
+          </div>
+          <div class="form-actions" style="margin-top: 16px;">
+            <button type="button" id="execute-sign-btn">Sign & Finalize Agreement</button>
+            <button type="button" id="cancel-sign-btn" class="secondary">Close</button>
+          </div>
+        </div>
+
+        <div id="agreements-list" class="record-list"></div>
+      </section>
+
+      <!-- SHORT-TERM BOOKINGS SUB-PAGE -->
+      <section id="bookings-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Short-Term Bookings</h2><p>Date-based stays, nightly or weekly pricing and guest bookings.</p></div>
+          <button id="new-booking-button">+ Add booking</button>
+        </div>
+        <div id="booking-form-wrap" class="panel hidden">
+          <h3 id="booking-form-title">Add short-term booking</h3>
+          <form id="booking-form" class="form-grid">
+            <input type="hidden" id="booking-id">
+            <label class="wide">Unit *
+              <select id="booking-unit" required></select>
+            </label>
+            <label class="wide">Guest / Tenant *
+              <select id="booking-tenant" required></select>
+            </label>
+            <label>Check-in date *<input id="booking-checkin" type="date" required></label>
+            <label>Check-out date *<input id="booking-checkout" type="date" required></label>
+            <label>Total Price (RM) *<input id="booking-price" type="number" min="0" step="0.01" required></label>
+            <label>Booking Status
+              <select id="booking-status">
+                <option value="confirmed">Confirmed</option>
+                <option value="checked_in">Checked In</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label class="wide">Notes<textarea id="booking-notes" rows="2"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save booking</button>
+              <button type="button" id="cancel-booking" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="bookings-list" class="record-list"></div>
+      </section>
+
+      <!-- DEPOSITS SUB-PAGE -->
+      <section id="deposits-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Deposits</h2><p>Security and other deposits linked to tenancies.</p></div>
+          <button id="new-deposit-button">+ Add deposit</button>
+        </div>
+        <div id="deposit-form-wrap" class="panel hidden">
+          <h3 id="deposit-form-title">Add deposit</h3>
+          <form id="deposit-form" class="form-grid">
+            <input type="hidden" id="deposit-id">
+            <label class="wide">Tenancy *
+              <select id="deposit-tenancy" required></select>
+            </label>
+            <label>Deposit type
+              <select id="deposit-type">
+                <option value="security">Security</option>
+                <option value="utility">Utility</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Amount (RM) *<input id="deposit-amount" type="number" min="0" step="0.01" required></label>
+            <label>Paid date<input id="deposit-paid" type="date"></label>
+            <label>Refunded date<input id="deposit-refunded" type="date"></label>
+            <label>Status
+              <select id="deposit-status">
+                <option value="held">Held</option>
+                <option value="partially_refunded">Partially refunded</option>
+                <option value="fully_refunded">Fully refunded</option>
+                <option value="forfeited">Forfeited</option>
+              </select>
+            </label>
+            <label class="wide">Notes<textarea id="deposit-notes" rows="2"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save deposit</button>
+              <button type="button" id="cancel-deposit" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="deposits-list" class="record-list"></div>
+      </section>
+
+      <!-- SALES SUB-PAGE (Inside Finance section) -->
+      <section id="sales-page" class="page hidden">
+        <div class="section-heading">
+          <div><h2>Property Sales</h2><p>Listings, transaction costs, commissions, offers and completion tracking.</p></div>
+          <button id="new-sale-button">+ Add sale listing</button>
+        </div>
+        <div id="sale-form-wrap" class="panel hidden">
+          <h3 id="sale-form-title">Add sale listing</h3>
+          <form id="sale-form" class="form-grid">
+            <input type="hidden" id="sale-id">
+            <label class="wide">Property *<select id="sale-property" required></select></label>
+            <label>Target asking price (RM)<input id="sale-target-price" type="number" min="0" step="0.01"></label>
+            <label>Status
+              <select id="sale-status">
+                <option value="listed">Listed</option>
+                <option value="offer_received">Offer received</option>
+                <option value="pending_completion">Pending completion</option>
+                <option value="completed">Completed</option>
+                <option value="withdrawn">Withdrawn</option>
+              </select>
+            </label>
+            <label>Agreed / Selling Price (RM)<input id="sale-agreed-price" type="number" min="0" step="0.01"></label>
+            <label>Estimated Commission/Fees (RM)<input id="sale-fees" type="number" min="0" step="0.01"></label>
+            <label class="wide">Notes / Buyer Info<textarea id="sale-notes" rows="2"></textarea></label>
+            <div class="form-actions wide">
+              <button type="submit">Save sale record</button>
+              <button type="button" id="cancel-sale" class="secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="sales-list" class="record-list"></div>
+      </section>
+
+      <!-- REPORTS & DOCUMENTS PAGE -->
+      <section id="reports-page" class="page hidden">
+        <div class="section-heading">
+          <div>
+            <h2>Reports & Portfolio Analysis</h2>
+            <p>Evaluate portfolio cash flow, net yields, operational expenses, and hold-vs-sell scenarios.</p>
+          </div>
+        </div>
+
+        <!-- PORTFOLIO SUMMARY CARDS -->
+        <div class="stats" style="margin-bottom: 24px;">
+          <article class="stat-card"><span>Total Rental Income</span><strong id="rep-total-income" style="color: #16a34a;">RM 0.00</strong></article>
+          <article class="stat-card"><span>Total Expenses & Loans</span><strong id="rep-total-expenses" style="color: #dc2626;">RM 0.00</strong></article>
+          <article class="stat-card"><span>Net Portfolio Cash Flow</span><strong id="rep-net-cashflow">RM 0.00</strong></article>
+        </div>
+
+        <div class="panel" style="margin-bottom: 24px;">
+          <h3 style="margin-bottom: 12px;">Property Cash Flow & Refinance / Sale Scenarios</h3>
+          <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+            Breakdown of individual property performance, combining recorded rental collections against operational slips, sinking funds, maintenance, and loan commitments.
+          </p>
+          <div id="property-reports-list" class="record-list"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</body>
+</html>
