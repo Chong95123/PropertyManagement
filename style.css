@@ -282,6 +282,12 @@ button:disabled {
   margin-bottom: 20px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .section-heading h2 {
   font-size: 20px;
   margin-bottom: 4px;
@@ -352,6 +358,100 @@ textarea:focus {
   margin-top: 8px;
 }
 
+.deposit-package-preview {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.deposit-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.deposit-table {
+  width: 100%;
+  min-width: 1000px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.deposit-table th,
+.deposit-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.deposit-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.deposit-table td:first-child {
+  min-width: 190px;
+}
+
+.deposit-table td > strong,
+.deposit-table td > small,
+.deposit-table-entry > small {
+  display: block;
+}
+
+.deposit-table td > small,
+.deposit-table-entry > small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.deposit-table-entry + .deposit-table-entry,
+.deposit-other-group + .deposit-other-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.deposit-entry-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.deposit-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.deposit-entry-actions button {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.deposit-missing,
+.deposit-no-results {
+  color: var(--muted);
+}
+
+.deposit-other-group > strong {
+  display: block;
+  margin-bottom: 5px;
+  text-transform: capitalize;
+}
+
 /* ---------- Buttons ---------- */
 
 button {
@@ -383,6 +483,90 @@ button.secondary:hover {
 .record-list {
   display: grid;
   gap: 12px;
+}
+
+.compact-record-search {
+  margin-top: 14px;
+  margin-bottom: 12px;
+}
+
+.compact-record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.compact-record-list > .compact-record-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(320px, 2fr) max-content;
+  align-items: center;
+  gap: 8px 16px;
+  min-width: 820px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: #fff;
+}
+
+.compact-record-row > h3,
+.compact-record-row > h4 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.compact-record-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.compact-record-details > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.compact-record-details > .record-meta {
+  margin: 0;
+}
+
+.compact-record-details > div[style*="background"] {
+  margin: 0 !important;
+  padding: 6px 8px !important;
+}
+
+.compact-record-details > div[style*="display:flex"] {
+  margin: 0 !important;
+}
+
+.compact-record-row > .record-meta {
+  margin: 0;
+}
+
+.compact-record-row > .record-actions {
+  margin: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.compact-record-row > .record-actions button {
+  padding: 6px 9px;
+  white-space: nowrap;
+}
+
+.compact-record-list > .compact-search-empty {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
 }
 
 .record-card h3 {
@@ -489,5 +673,182 @@ button.secondary:hover {
   .section-heading {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* ---------- Tenancy agreement workflow ---------- */
+
+.agreement-template-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.agreement-template-panel h3,
+.agreement-signing-panel h3 {
+  margin-bottom: 4px;
+}
+
+.agreement-template-panel p,
+.agreement-signing-panel p,
+.form-help {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.agreement-template-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.agreement-template-form label {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agreement-template-form input[type="file"] {
+  padding: 8px;
+}
+
+.agreement-signing-panel {
+  margin-bottom: 20px;
+  border: 2px solid var(--blue);
+}
+
+.agreement-extra-fields {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.agreement-extra-fields h4 {
+  margin: 0;
+}
+
+.agreement-extra-fields-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.agreement-extra-field {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agreement-contact-group {
+  margin: 8px 0 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.agreement-contact-group legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+.agreement-contact-group .form-grid {
+  margin-top: 6px;
+}
+
+.agreement-search {
+  display: block;
+  max-width: 560px;
+  margin: 18px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agreement-search input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.agreement-extra-field small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.agreement-photos-panel {
+  margin-bottom: 20px;
+  border: 2px solid var(--blue);
+}
+
+.agreement-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.agreement-photo-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+
+.agreement-photo-card img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+}
+
+.agreement-photo-card div {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.signature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.signature-entry {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.signature-entry label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.signature-pad {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  touch-action: none;
+}
+
+.clear-signature {
+  justify-self: start;
+}
+
+@media (max-width: 700px) {
+  .signature-grid,
+  .agreement-extra-fields-list {
+    grid-template-columns: 1fr;
   }
 }

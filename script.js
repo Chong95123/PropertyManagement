@@ -25,6 +25,7 @@ const state = {
   tenants: [],
   tenancies: [],
   agreements: [],
+  agreementTemplate: null,
   bookings: [],
   deposits: [],
   sales: [],
@@ -32,6 +33,7 @@ const state = {
   maintenance: [],
   page: "dashboard"
 };
+
 
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;",
@@ -189,6 +191,49 @@ function renderAll() {
   renderMaintenance();
   renderReports();
   populateSelects();
+  formatCompactRecordLists();
+}
+
+function formatCompactRecordLists() {
+  document.querySelectorAll(".compact-record-list").forEach(container => {
+    Array.from(container.children).filter(child => child.classList.contains("record-card")).forEach(card => {
+      if (card.classList.contains("compact-record-row")) return;
+      const children = Array.from(card.children);
+      const title = children.find(child => child.matches("h3, h4")) || children[0];
+      const actions = children.find(child => child.classList.contains("record-actions"));
+      const details = document.createElement("div");
+      details.className = "compact-record-details";
+      children.filter(child => child !== title && child !== actions).forEach(child => details.appendChild(child));
+      card.replaceChildren(...[title, details, actions].filter(Boolean));
+      card.classList.add("compact-record-row");
+      card.dataset.compactSearch = `${title?.textContent || ""} ${details.textContent || ""}`.toLowerCase();
+    });
+
+    let noMatch = container.querySelector(":scope > .compact-search-empty");
+    if (!noMatch) {
+      noMatch = document.createElement("div");
+      noMatch.className = "panel empty compact-search-empty hidden";
+      noMatch.textContent = "No matching records found.";
+      container.appendChild(noMatch);
+    }
+    filterCompactRecordList(container);
+  });
+}
+
+function filterCompactRecordList(container) {
+  if (typeof container === "string") container = $(container);
+  if (!container) return;
+  const input = document.querySelector(`[data-list-search="${container.id}"]`);
+  const query = (input?.value || "").trim().toLowerCase();
+  const rows = Array.from(container.querySelectorAll(":scope > .compact-record-row"));
+  let visible = 0;
+  rows.forEach(row => {
+    const matches = !query || (row.dataset.compactSearch || "").includes(query);
+    row.classList.toggle("hidden", !matches);
+    if (matches) visible++;
+  });
+  const noMatch = container.querySelector(":scope > .compact-search-empty");
+  noMatch?.classList.toggle("hidden", !query || !rows.length || visible > 0);
 }
 
 /* ---------------- DASHBOARD & RENEWAL REMINDERS ---------------- */
@@ -375,9 +420,12 @@ function editOwner(id) {
   $("owner-id").value = o.id;
   $("owner-name").value = o.owner_name;
   $("owner-type").value = o.owner_type;
+  $("owner-identity-number").value = o.identity_number || "";
   $("owner-phone").value = o.phone || "";
   $("owner-email").value = o.email || "";
   $("owner-address").value = o.mailing_address || "";
+  $("owner-bank-name").value = o.bank_name || "";
+  $("owner-bank-account").value = o.bank_account || "";
   $("owner-notes").value = o.notes || "";
   $("owner-form-title").textContent = "Edit owner";
   $("owner-form-wrap").classList.remove("hidden");
@@ -390,9 +438,12 @@ async function saveOwner(event) {
   const record = {
     owner_name: $("owner-name").value.trim(),
     owner_type: $("owner-type").value,
+    identity_number: $("owner-identity-number").value.trim() || null,
     phone: $("owner-phone").value.trim() || null,
     email: $("owner-email").value.trim() || null,
     mailing_address: $("owner-address").value.trim() || null,
+    bank_name: $("owner-bank-name").value.trim() || null,
+    bank_account: $("owner-bank-account").value.trim() || null,
     notes: $("owner-notes").value.trim() || null
   };
   try {
@@ -451,6 +502,7 @@ function populateSelects() {
   if ($("tenancy-unit")) $("tenancy-unit").innerHTML = '<option value="">Select unit</option>' + unitOptions;
   if ($("tenancy-tenant")) $("tenancy-tenant").innerHTML = '<option value="">Select tenant</option>' + tenantOptions;
   if ($("agreement-tenancy")) $("agreement-tenancy").innerHTML = '<option value="">Select tenancy</option>' + tenancyOptions;
+  if ($("deposit-package-tenancy")) $("deposit-package-tenancy").innerHTML = '<option value="">Select tenancy</option>' + tenancyOptions;
   if ($("booking-unit")) $("booking-unit").innerHTML = '<option value="">Select unit</option>' + unitOptions;
   if ($("booking-tenant")) $("booking-tenant").innerHTML = '<option value="">Select guest</option>' + tenantOptions;
   if ($("deposit-tenancy")) $("deposit-tenancy").innerHTML = '<option value="">Select tenancy</option>' + tenancyOptions;
@@ -646,6 +698,7 @@ function renderTenants() {
         <p>${esc(t.notes || "")}</p>
         <div class="record-actions">
           <button data-edit-tenant="${t.id}">Edit</button>
+          <button class="secondary" data-add-tenancy-for="${t.id}">Add tenancy</button>
           <button class="secondary" data-delete-tenant="${t.id}">Delete</button>
         </div>
       </article>`).join("")
@@ -746,7 +799,7 @@ function resetTenancyForm() {
   $("tenancy-form-wrap").classList.add("hidden");
 }
 
-function openTenancyForm(id = "") {
+function openTenancyForm(id = "", tenantId = "") {
   if (!state.units.length || !state.tenants.length) {
     message("app-message", "Create at least one unit and one tenant first.", "error");
     return;
@@ -766,6 +819,8 @@ function openTenancyForm(id = "") {
     $("tenancy-status").value = t.status;
     $("tenancy-notes").value = t.notes || "";
     $("tenancy-form-title").textContent = "Edit tenancy";
+  } else if (tenantId && state.tenants.some(tenant => tenant.id === tenantId)) {
+    $("tenancy-tenant").value = tenantId;
   }
   $("tenancy-form-wrap").classList.remove("hidden");
   $("tenancy-form-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -796,7 +851,6 @@ async function saveTenancy(event) {
     reportError(error);
   }
 }
-
 async function deleteTenancy(id) {
   if (!confirm("Delete this tenancy?")) return;
   try {
@@ -807,40 +861,839 @@ async function deleteTenancy(id) {
   }
 }
 
-/* ---------------- TENANCY AGREEMENTS & AUTO-FILL / SIGNING ---------------- */
+/* ---------------- TENANCY AGREEMENTS & WORD TEMPLATE ---------------- */
+
+const AGREEMENT_BUCKET = "tenancy-documents";
+const AGREEMENT_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const signaturePads = {};
+
+function setupSignaturePads() {
+  ["landlord", "tenant", "witness"].forEach(party => {
+    const canvas = $(`${party}-sign-pad`);
+    if (!canvas || signaturePads[party]) return;
+    canvas.width = 720;
+    canvas.height = 300;
+    const ctx = canvas.getContext("2d");
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#0f172a";
+    const pad = signaturePads[party] = { canvas, ctx, hasInk: false, drawing: false };
+    canvas.addEventListener("pointerdown", event => {
+      if (canvas.dataset.readonly === "true") return;
+      pad.drawing = true;
+      canvas.setPointerCapture(event.pointerId);
+      const point = signaturePoint(canvas, event);
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(point.x + 0.1, point.y + 0.1);
+      ctx.stroke();
+      pad.hasInk = true;
+    });
+    canvas.addEventListener("pointermove", event => {
+      if (!pad.drawing) return;
+      const point = signaturePoint(canvas, event);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+    });
+    const stopDrawing = () => { pad.drawing = false; };
+    canvas.addEventListener("pointerup", stopDrawing);
+    canvas.addEventListener("pointercancel", stopDrawing);
+  });
+}
+
+function signaturePoint(canvas, event) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * canvas.width / rect.width,
+    y: (event.clientY - rect.top) * canvas.height / rect.height
+  };
+}
+
+function clearSignature(party) {
+  const pad = signaturePads[party];
+  if (!pad) return;
+  pad.ctx.clearRect(0, 0, pad.canvas.width, pad.canvas.height);
+  pad.hasInk = false;
+}
+
+function parseSavedSignature(value) {
+  if (!value) return { name: "", image: "" };
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object") return { name: parsed.name || "", image: parsed.image || "" };
+  } catch { /* Older agreements may contain a typed name. */ }
+  return { name: String(value), image: "" };
+}
+
+function restoreSignature(party, imageData) {
+  clearSignature(party);
+  if (!imageData || !imageData.startsWith("data:image/png;base64,")) return;
+  const pad = signaturePads[party];
+  const image = new Image();
+  image.onload = () => {
+    pad.ctx.drawImage(image, 0, 0, pad.canvas.width, pad.canvas.height);
+    pad.hasInk = true;
+  };
+  image.src = imageData;
+}
+
+function setAgreementTemplateStatus(text, type = "") {
+  message("agreement-template-status", text, type);
+}
+
+function agreementStorageError(error) {
+  const detail = error?.message || "Storage request failed.";
+  return /bucket.*not found/i.test(detail)
+    ? "The tenancy-documents bucket is missing. Run tenancy-agreement-storage.sql in the same Supabase project as this app."
+    : detail;
+}
+
+async function currentUserId() {
+  const { data, error } = await db.auth.getUser();
+  if (error) throw error;
+  if (!data.user) throw new Error("Sign in again before managing agreement files.");
+  return data.user.id;
+}
+
+async function loadAgreementTemplateInfo() {
+  const status = $("agreement-template-status");
+  if (!status || !db) return null;
+  try {
+    const userId = await currentUserId();
+    const { data, error } = await db.storage.from(AGREEMENT_BUCKET).list(`${userId}/templates`, {
+      limit: 100,
+      sortBy: { column: "created_at", order: "desc" }
+    });
+    if (error) throw error;
+    const versions = (data || [])
+      .filter(file => file.name && file.name.toLowerCase().endsWith(".docx"))
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    state.agreementTemplate = versions.length
+      ? { path: `${userId}/templates/${versions[0].name}`, name: versions[0].name, createdAt: versions[0].created_at }
+      : null;
+    if (state.agreementTemplate) {
+      const uploadedAt = state.agreementTemplate.createdAt
+        ? ` · uploaded ${new Date(state.agreementTemplate.createdAt).toLocaleString()}`
+        : "";
+      setAgreementTemplateStatus(`Current template: ${state.agreementTemplate.name}${uploadedAt}`, "success");
+    } else {
+      setAgreementTemplateStatus("No Word template uploaded yet. Upload your .docx agreement to begin.");
+    }
+    return state.agreementTemplate;
+  } catch (error) {
+    state.agreementTemplate = null;
+    setAgreementTemplateStatus(`Agreement storage is not ready: ${error.message}. Run tenancy-agreement-storage.sql in Supabase first.`, "error");
+    return null;
+  }
+}
+
+async function uploadAgreementTemplate(event) {
+  event.preventDefault();
+  const file = $("agreement-template-file").files[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".docx")) {
+    setAgreementTemplateStatus("Choose a Word .docx file.", "error");
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    setAgreementTemplateStatus("The template must be smaller than 20 MB.", "error");
+    return;
+  }
+  try {
+    const userId = await currentUserId();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const path = `${userId}/templates/${Date.now()}_${safeName}`;
+    const { error } = await db.storage.from(AGREEMENT_BUCKET).upload(path, file, {
+      contentType: AGREEMENT_DOCX_MIME,
+      upsert: false
+    });
+    if (error) throw error;
+    $("agreement-template-form").reset();
+    await loadAgreementTemplateInfo();
+    message("app-message", "Word agreement template uploaded as a new version.", "success");
+  } catch (error) {
+    setAgreementTemplateStatus(agreementStorageError(error), "error");
+  }
+}
+
+function agreementContext(tenancyId) {
+  const sameId = (left, right) => left != null && right != null && String(left) === String(right);
+  const tenancy = state.tenancies.find(item => sameId(item.id, tenancyId));
+  if (!tenancy) throw new Error("Select a valid tenancy.");
+  const tenant = state.tenants.find(item => sameId(item.id, tenancy.tenant_id));
+  const unit = state.units.find(item => sameId(item.id, tenancy.unit_id));
+  const property = state.properties.find(item => sameId(item.id, unit?.property_id));
+  const ownerLink = state.links.find(item => sameId(item.property_id, property?.id));
+  const owner = state.owners.find(item => sameId(item.id, ownerLink?.owner_id));
+  return { tenancy, tenant, unit, property, owner };
+}
+
+function missingAgreementSourceData(tenancyId) {
+  const context = agreementContext(tenancyId);
+  const missing = [];
+  if (!context.owner) missing.push("link an owner to the property in Ownership Links");
+  if (!context.owner?.identity_number || !context.owner?.bank_name || !context.owner?.bank_account || !context.owner?.mailing_address) {
+    missing.push("complete the owner's ID, mailing address, and bank details in Owners");
+  }
+  if (!context.tenant?.ic_or_passport || !context.tenant?.mailing_address) {
+    missing.push("complete the tenant's ID and mailing address in Tenants");
+  }
+  if (!context.property?.address || !context.unit?.unit_name) missing.push("complete the property and unit address in Properties");
+  if (!context.tenancy.start_date || !context.tenancy.end_date || context.tenancy.monthly_rent == null) {
+    missing.push("complete the tenancy dates and rent in Long-Term Tenancies");
+  }
+  const activeDeposits = state.deposits.filter(item => item.tenancy_id === tenancyId && !["fully_refunded", "forfeited"].includes(item.status));
+  if (!activeDeposits.some(item => item.deposit_type === "security")) missing.push("record the security deposit in Deposits");
+  if (!activeDeposits.some(item => item.deposit_type === "utility")) missing.push("record the utilities deposit in Deposits");
+  return missing;
+}
+
+const AGREEMENT_SOURCE_TOKENS = new Set([
+  "{{terms.start_date_formatted}}", "{{parties.landlord.name_at_signing}}", "{{parties.landlord.id_number}}",
+  "{{parties.landlord.address_at_signing}}", "{{parties.landlord.bank_name}}", "{{parties.landlord.bank_account}}",
+  "{{parties.tenant.name_at_signing}}", "{{parties.tenant.id_number}}", "{{parties.tenant.address_at_signing}}",
+  "{{premises.unit_no}}", "{{premises.building_name}}", "{{premises.street_address}}", "{{premises.postcode_city_state}}",
+  "{{premises.address_at_signing}}", "{{terms.start_date}}", "{{terms.end_date}}", "{{terms.monthly_rent}}",
+  "{{terms.rent_due_day}}", "{{terms.term_text}}", "{{deposits.security}}", "{{deposits.utilities}}"
+]);
+
+function parseAgreementDate(value) {
+  if (!value) return null;
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function longAgreementDate(value) {
+  const date = parseAgreementDate(value);
+  return date ? `${date.getDate()} ${date.toLocaleString("en-MY", { month: "long" }).toUpperCase()} ${date.getFullYear()}` : "";
+}
+
+function agreementSupplementalValues() {
+  const tenancyId = $("agreement-tenancy")?.value;
+  const context = tenancyId ? agreementContext(tenancyId) : null;
+  const currentDeposits = state.deposits.filter(item => item.tenancy_id === tenancyId && !["fully_refunded", "forfeited"].includes(item.status));
+  const latestDeposit = type => currentDeposits.filter(item => item.deposit_type === type)
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
+  const securityDeposit = latestDeposit("security");
+  const utilitiesDeposit = latestDeposit("utility");
+  const propertyType = String(context?.property?.property_type || "").toLowerCase();
+  const purpose = propertyType === "residential" ? "RESIDENTIAL"
+    : ["commercial", "industrial"].includes(propertyType) ? "COMMERCIAL"
+    : propertyType ? "OTHER" : "";
+  return {
+    landlordIc: context?.owner?.identity_number || "",
+    bankName: context?.owner?.bank_name || "",
+    bankAccount: context?.owner?.bank_account || "",
+    securityDeposit: securityDeposit?.amount == null ? "" : Number(securityDeposit.amount).toFixed(2),
+    utilitiesDeposit: utilitiesDeposit?.amount == null ? "" : Number(utilitiesDeposit.amount).toFixed(2),
+    purpose,
+    purposeOther: propertyType || "",
+    specialConditions: "NONE",
+    renewalEnabled: Boolean($("agreement-renewal-enabled")?.checked)
+  };
+}
+
+function agreementTermText(startValue, endValue) {
+  const start = parseAgreementDate(startValue);
+  const end = parseAgreementDate(endValue);
+  if (!start || !end || end < start) return "";
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth();
+  if (end.getDate() >= start.getDate()) months += 1;
+  if (months <= 0) return `${Math.max(1, Math.ceil((end - start) / 86400000))} days`;
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+  return [years ? `${years} year${years === 1 ? "" : "s"}` : "", remainingMonths ? `${remainingMonths} month${remainingMonths === 1 ? "" : "s"}` : ""].filter(Boolean).join(" ");
+}
+
+function numberToWords(value) {
+  const small = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+  const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+  const underThousand = number => {
+    const parts = [];
+    if (number >= 100) {
+      parts.push(`${small[Math.floor(number / 100)]} hundred`);
+      number %= 100;
+    }
+    if (number >= 20) {
+      parts.push(tens[Math.floor(number / 10)] + (number % 10 ? `-${small[number % 10]}` : ""));
+    } else if (number > 0) parts.push(small[number]);
+    return parts.join(" ");
+  };
+  const amount = Math.max(0, Math.floor(Number(value) || 0));
+  if (amount === 0) return "zero";
+  const groups = [[1_000_000_000, "billion"], [1_000_000, "million"], [1_000, "thousand"], [1, ""]];
+  let remainder = amount;
+  const words = [];
+  for (const [scale, name] of groups) {
+    const group = Math.floor(remainder / scale);
+    if (group) {
+      words.push(`${underThousand(group)}${name ? ` ${name}` : ""}`);
+      remainder %= scale;
+    }
+  }
+  return words.join(" ");
+}
+
+function amountInWords(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  const roundedCents = Math.round(amount * 100);
+  const whole = Math.floor(roundedCents / 100);
+  const cents = roundedCents % 100;
+  return `${numberToWords(whole)}${cents ? ` and ${numberToWords(cents)} sen` : ""} only`;
+}
+
+function agreementTemplateValues(context, supplemental) {
+  const { tenancy, tenant, unit, property, owner } = context;
+  const fullAddress = [unit?.unit_name, property?.property_name, property?.address, property?.postcode, property?.city, property?.state, "Malaysia"].filter(Boolean).join(", ");
+  return {
+    "{{terms.start_date_formatted}}": longAgreementDate(tenancy.start_date),
+    "{{parties.landlord.name_at_signing}}": owner?.owner_name || "",
+    "{{parties.landlord.id_number}}": supplemental.landlordIc || "",
+    "{{parties.landlord.address_at_signing}}": owner?.mailing_address || property?.address || "",
+    "{{parties.landlord.bank_name}}": supplemental.bankName || "",
+    "{{parties.landlord.bank_account}}": supplemental.bankAccount || "",
+    "{{parties.tenant.name_at_signing}}": tenant?.tenant_name || "",
+    "{{parties.tenant.id_number}}": tenant?.ic_or_passport || "",
+    "{{parties.tenant.address_at_signing}}": tenant?.mailing_address || "",
+    "{{premises.unit_no}}": unit?.unit_name || "",
+    "{{premises.building_name}}": property?.property_name || "",
+    "{{premises.street_address}}": property?.address || "",
+    "{{premises.postcode_city_state}}": [property?.postcode, property?.city, property?.state, "Malaysia"].filter(Boolean).join(", "),
+    "{{premises.address_at_signing}}": fullAddress,
+    "{{terms.start_date}}": longAgreementDate(tenancy.start_date),
+    "{{terms.end_date}}": longAgreementDate(tenancy.end_date),
+    "{{terms.monthly_rent}}": tenancy.monthly_rent == null ? "" : Number(tenancy.monthly_rent).toFixed(2),
+    "{{terms.rent_due_day}}": tenancy.rent_due_day ? String(tenancy.rent_due_day) : "",
+    "{{terms.term_text}}": agreementTermText(tenancy.start_date, tenancy.end_date),
+    "{{terms.landlord_capacity}}": owner ? "owner" : "",
+    "{{terms.permitted_use}}": supplemental.purpose === "OTHER" ? supplemental.purposeOther : supplemental.purpose,
+    "{{deposits.security}}": supplemental.securityDeposit,
+    "{{deposits.utilities}}": supplemental.utilitiesDeposit,
+    "{{deposits.additional_amount}}": "0.00",
+    "{{deposits.additional_purpose}}": "None",
+    "{{clauses.assignment_and_subletting}}": "not assign",
+    "{{clauses.early_termination_text}}": "the rent for the remaining unexpired term of the tenancy",
+    "{{clauses.early_termination_compensation}}": "the rent for the remaining unexpired term of the tenancy",
+    "{{clauses.subletting_permission}}": "The Landlord does not grant",
+    "{{clauses.restoration_grace_period}}": "fourteen (14) days",
+    "{{renewal.term_text}}": supplemental.renewalEnabled ? "" : "No renewal option",
+    "{{renewal.notice_months}}": supplemental.renewalEnabled ? "" : "N/A",
+    "{{renewal.rent_text}}": supplemental.renewalEnabled ? "" : "N/A",
+    "{{renewal.adjusted_security_deposit}}": supplemental.renewalEnabled ? "" : "N/A",
+    "{{clauses.stamp_duty_payer}}": "Tenant"
+  };
+}
+
+function agreementTokenReplacer(context, supplemental) {
+  const { tenancy, tenant, unit, property, owner } = context;
+  const now = new Date();
+  const cityState = [property?.postcode, property?.city, property?.state, "Malaysia"].filter(Boolean).join(", ");
+  return (token, paragraphContext = "", localParagraphText = paragraphContext) => {
+    if (token.startsWith("{{") && token.endsWith("}}")) {
+      const mapped = agreementTemplateValues(context, supplemental)[token];
+      return mapped ? String(mapped) : token;
+    }
+    const key = token.toUpperCase().replace(/[–—]/g, "-");
+    const nearby = paragraphContext.toLowerCase();
+    const local = localParagraphText.toLowerCase();
+    if (key === "[DAY]") return String(now.getDate());
+    if (key === "[MONTH]") return now.toLocaleString("en-MY", { month: "long" });
+    if (key === "[YEAR]") return String(now.getFullYear());
+    if (key === "[LANDLORD FULL NAME]") return owner?.owner_name || token;
+    if (key === "[NRIC / PASSPORT NO]") return supplemental.landlordIc || token;
+    if (key === "[TENANT FULL NAME / COMPANY NAME]") return tenant?.tenant_name || token;
+    if (key === "[NRIC / COMPANY NO]") return tenant?.ic_or_passport || token;
+    if (key === "[LANDLORD CORRESPONDENCE ADDRESS]") return owner?.mailing_address || property?.address || token;
+    if (key === "[TENANT CORRESPONDENCE ADDRESS]") return tenant?.mailing_address || token;
+    if (key === "[BANK NAME]") return supplemental.bankName || token;
+    if (key === "[ACCOUNT NUMBER]") return supplemental.bankAccount || token;
+    if (key === "[EMAIL]") return nearby.includes("description of landlord") ? owner?.email || token : nearby.includes("description of tenant") ? tenant?.email || token : token;
+    if (key === "[PHONE NUMBER]") return nearby.includes("description of landlord") ? owner?.phone || token : nearby.includes("description of tenant") ? tenant?.phone || token : token;
+    if (key === "[UNIT NO. / BLOCK / FLOOR]" || key === "[UNIT NO.]" ) return unit?.unit_name || token;
+    if (key === "[BUILDING / CONDOMINIUM / HOUSE NAME]" || key === "[BUILDING / CONDOMINIUM NAME]") return property?.property_name || token;
+    if (key === "[STREET ADDRESS]") return property?.address || token;
+    if (key === "[POSTCODE]") return property?.postcode || token;
+    if (key === "[CITY]") return property?.city || token;
+    if (key === "[STATE]") return property?.state || token;
+    if (key === "[POSTCODE, CITY, STATE, MALAYSIA]") return cityState || token;
+    if (key === "[DD MONTH YYYY]") {
+      if (local.includes("commencement")) return longAgreementDate(tenancy.start_date) || token;
+      if (local.includes("expiry")) return longAgreementDate(tenancy.end_date) || token;
+      return token;
+    }
+    if (key === "[AMOUNT]" || key === "[AMOUNT IN WORDS]") {
+      let amount = null;
+      if (nearby.includes("monthly rental") || nearby.includes("section 8")) amount = tenancy.monthly_rent;
+      else if (nearby.includes("security deposit") || nearby.includes("section 10")) amount = supplemental.securityDeposit;
+      else if (nearby.includes("utilities deposit") || nearby.includes("section 11")) amount = supplemental.utilitiesDeposit;
+      if (amount == null || amount === "") return token;
+      return key === "[AMOUNT IN WORDS]" ? amountInWords(amount) : Number(amount).toFixed(2);
+    }
+    if (key === "[INSERT ANY FURTHER SPECIAL CONDITIONS HERE, OR STATE \"NONE\"]") return supplemental.specialConditions || "NONE";
+    if (key.includes("RESIDENTIAL / COMMERCIAL / CO-LIVING / HOMESTAY")) {
+      return supplemental.purpose === "OTHER" && supplemental.purposeOther
+        ? `OTHER - ${supplemental.purposeOther}`
+        : supplemental.purpose || token;
+    }
+    if (key === "[1ST TO 7TH / OTHER]") {
+      const day = Number(tenancy.rent_due_day) || 1;
+      return `${day}${day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"}`;
+    }
+    return token;
+  };
+}
+
+function isAgreementInstructionToken(token) {
+  const key = token.toLowerCase();
+  return key === "[bracketed]" || key === "[red brackets]" || key === "[the remainder of this page is intentionally left blank]";
+}
+
+function hasDedicatedAgreementInput(token) {
+  const key = token.toUpperCase();
+  return ["[NRIC / PASSPORT NO]", "[BANK NAME]", "[ACCOUNT NUMBER]", "[AMOUNT]", "[AMOUNT IN WORDS]", "[INSERT ANY FURTHER SPECIAL CONDITIONS HERE, OR STATE \"NONE\"]"].includes(key)
+    || key.includes("RESIDENTIAL / COMMERCIAL / CO-LIVING / HOMESTAY");
+}
+
+function paragraphTextNodes(paragraph) {
+  return Array.from(paragraph.getElementsByTagNameNS(WORD_NS, "t"));
+}
+
+function paragraphAgreementContext(paragraph) {
+  let ancestor = paragraph.parentNode;
+  while (ancestor && ancestor.localName !== "tr") ancestor = ancestor.parentNode;
+  const source = ancestor || paragraph;
+  return Array.from(source.getElementsByTagNameNS(WORD_NS, "t")).map(node => node.textContent).join("").replace(/\s+/g, " ").trim();
+}
+
+function agreementTokenKey(partName, paragraphIndex, tokenIndex) {
+  return `${partName}:${paragraphIndex}:${tokenIndex}`;
+}
+
+function replaceWordParagraphToken(textNodes, start, end, replacement) {
+  let offset = 0;
+  let startNode = -1;
+  let endNode = -1;
+  let startOffset = 0;
+  let endOffset = 0;
+  for (let i = 0; i < textNodes.length; i++) {
+    const length = textNodes[i].textContent.length;
+    if (startNode < 0 && start <= offset + length) {
+      startNode = i;
+      startOffset = Math.max(0, start - offset);
+    }
+    if (endNode < 0 && end <= offset + length) {
+      endNode = i;
+      endOffset = end - offset;
+      break;
+    }
+    offset += length;
+  }
+  if (startNode < 0 || endNode < 0) return;
+  if (startNode === endNode) {
+    const value = textNodes[startNode].textContent;
+    textNodes[startNode].textContent = value.slice(0, startOffset) + replacement + value.slice(endOffset);
+    return;
+  }
+  const firstText = textNodes[startNode].textContent;
+  const lastText = textNodes[endNode].textContent;
+  textNodes[startNode].textContent = firstText.slice(0, startOffset) + replacement;
+  for (let i = startNode + 1; i < endNode; i++) textNodes[i].textContent = "";
+  textNodes[endNode].textContent = lastText.slice(endOffset);
+}
+
+function replaceAgreementPhrase(xml, searchText, replacement) {
+  const paragraphs = Array.from(xml.getElementsByTagNameNS(WORD_NS, "p"));
+  paragraphs.forEach(paragraph => {
+    const nodes = paragraphTextNodes(paragraph);
+    const source = nodes.map(node => node.textContent).join("");
+    const matches = Array.from(source.matchAll(new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")));
+    matches.reverse().forEach(match => replaceWordParagraphToken(nodes, match.index, match.index + searchText.length, replacement));
+  });
+}
+
+function replaceNthAgreementLabel(xml, label, value, occurrence = 0) {
+  if (!value) return;
+  const paragraphs = Array.from(xml.getElementsByTagNameNS(WORD_NS, "p"));
+  const matches = paragraphs.filter(paragraph => paragraphTextNodes(paragraph).map(node => node.textContent).join("").trim().startsWith(label));
+  const paragraph = matches[occurrence];
+  if (!paragraph) return;
+  const nodes = paragraphTextNodes(paragraph);
+  const source = nodes.map(node => node.textContent).join("");
+  const start = source.indexOf(label) + label.length;
+  replaceWordParagraphToken(nodes, start, source.length, `: ${value}`);
+}
+
+function agreementExtraFieldLabel(token, paragraphContext) {
+  if (token.startsWith("{{") && token.endsWith("}}")) {
+    const labels = {
+      "{{terms.landlord_capacity}}": "Landlord capacity (owner, beneficial owner, or authorised agent)",
+      "{{terms.term_text}}": "Tenancy term",
+      "{{deposits.additional_amount}}": "Additional deposit amount (enter 0 if none)",
+      "{{deposits.additional_purpose}}": "Purpose of additional deposit (enter None if not applicable)",
+      "{{renewal.term_text}}": "Renewal term",
+      "{{renewal.notice_months}}": "Renewal notice period in months",
+      "{{renewal.rent_text}}": "Rent for renewal term",
+      "{{renewal.adjusted_security_deposit}}": "Adjusted security deposit for renewal",
+      "{{clauses.assignment_and_subletting}}": "Assignment and sub-letting restriction",
+      "{{clauses.early_termination_text}}": "Early termination amount / basis",
+      "{{clauses.early_termination_compensation}}": "Early termination compensation terms",
+      "{{clauses.subletting_permission}}": "Sub-letting / partitioning permission",
+      "{{clauses.restoration_grace_period}}": "Restoration grace period"
+    };
+    return labels[token] || token.replace(/^\{\{|\}\}$/g, "").split(".").slice(-1)[0].replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
+  }
+  const key = token.toLowerCase();
+  const context = paragraphContext.toLowerCase();
+  if (key.includes("landlord grants / does not grant")) return "Sub-letting and partitioning permission";
+  if (key.includes("not assign / may assign")) return "Assignment and sub-letting consent";
+  if (key.includes("amount or")) return "Additional deposit amount, or N/A";
+  if (key.includes("purpose,")) return "Additional deposit purpose";
+  if (key.includes("amount in words")) {
+    if (context.includes("security deposit")) return "Security deposit amount in words";
+    if (context.includes("utilities deposit")) return "Utilities deposit amount in words";
+    return "Monthly rent amount in words";
+  }
+  if (key.includes("if multi-tier")) return "Multi-tier rent details (optional)";
+  if (key.includes("rm _____")) return "Adjusted security deposit for renewal";
+  if (key.includes("tenant / landlord")) return "Who pays stamp duty";
+  if (key.includes("to be agreed / increase")) return "Renewal rent";
+  if (key.includes("e.g.")) {
+    if (context.includes("liquidated damages") || context.includes("early termination")) return "Early termination compensation";
+    if (context.includes("grace period")) return "Restoration grace period";
+    if (context.includes("security deposit")) return "Security deposit basis";
+    if (context.includes("utilities deposit")) return "Utilities deposit basis";
+    if (context.includes("renewal option")) return "Renewal term or notice period";
+    if (context.includes("term of tenancy")) return "Tenancy term";
+  }
+  return token.replace(/^\[|\]$/g, "");
+}
+
+function collectAgreementExtraValues() {
+  return new Map(Array.from(document.querySelectorAll("[data-agreement-extra-key]"), input => [input.dataset.agreementExtraKey, input.value.trim()]));
+}
+
+function collectAgreementWitnessContacts() {
+  return {
+    name: $("agreement-witness-name").value.trim(),
+    id_number: $("agreement-witness-id").value.trim(),
+    phone: $("agreement-witness-phone").value.trim(),
+    email: $("agreement-witness-email").value.trim(),
+    agency_or_referral: $("agreement-witness-agency").value.trim()
+  };
+}
+
+function parseAgreementData(agreement) {
+  if (agreement?.agreement_data && typeof agreement.agreement_data === "object") return agreement.agreement_data;
+  try { return JSON.parse(agreement?.agreement_data || "{}"); } catch { return {}; }
+}
+
+async function discoverAgreementExtraFields(templatePath, tenancyId) {
+  if (!window.JSZip) throw new Error("The Word document library did not load. Refresh the page and try again.");
+  const { data: templateBlob, error } = await db.storage.from(AGREEMENT_BUCKET).download(templatePath);
+  if (error) throw error;
+  const zip = await window.JSZip.loadAsync(templateBlob);
+  const replacer = agreementTokenReplacer(agreementContext(tenancyId), agreementSupplementalValues());
+  const fields = [];
+  const xmlFiles = Object.keys(zip.files).filter(name => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/i.test(name));
+  for (const name of xmlFiles) {
+    const xml = new DOMParser().parseFromString(await zip.file(name).async("string"), "application/xml");
+    const paragraphs = Array.from(xml.getElementsByTagNameNS(WORD_NS, "p"));
+    paragraphs.forEach((paragraph, paragraphIndex) => {
+      const nodes = paragraphTextNodes(paragraph);
+      const text = nodes.map(node => node.textContent).join("");
+      const context = paragraphAgreementContext(paragraph);
+      for (const match of text.matchAll(/\{\{[^}]+\}\}|\[[^\]]+\]/g)) {
+        const token = match[0];
+        if (isAgreementInstructionToken(token) || replacer(token, context, text) !== token || hasDedicatedAgreementInput(token) || AGREEMENT_SOURCE_TOKENS.has(token)) continue;
+        const key = token.startsWith("{{") ? `token:${token}` : agreementTokenKey(name, paragraphIndex, match.index);
+        if (!fields.some(field => field.key === key)) fields.push({
+          key,
+          token,
+          label: agreementExtraFieldLabel(token, context),
+          context: context.slice(0, 150),
+          optional: token.toLowerCase().includes("if multi-tier") || token === "{{deposits.additional_amount}}" || token === "{{deposits.additional_purpose}}"
+        });
+      }
+    });
+  }
+  return fields;
+}
+
+async function refreshAgreementExtraFields() {
+  const wrap = $("agreement-extra-fields");
+  const list = $("agreement-extra-fields-list");
+  const tenancyId = $("agreement-tenancy").value;
+  const template = state.agreementTemplate || await loadAgreementTemplateInfo();
+  if (!wrap || !list || !tenancyId || !template) return;
+  try {
+    const missingSources = missingAgreementSourceData(tenancyId);
+    $("agreement-autofill-summary").textContent = "Tenant, owner, property, tenancy, and deposits are picked up from their existing records." +
+      (missingSources.length ? ` Before drafting, update: ${missingSources.join("; ")}.` : "");
+    const fields = await discoverAgreementExtraFields(template.path, tenancyId);
+    list.innerHTML = fields.map(field => `
+      <label class="agreement-extra-field">
+        <span>${esc(field.label)}${field.optional ? "" : " *"}</span>
+        <small>${field.context ? esc(field.context) : `Template field: ${esc(field.token)}`}</small>
+        ${field.optional
+          ? `<textarea data-agreement-extra-key="${esc(field.key)}" rows="2" placeholder="Leave blank if not applicable"></textarea>`
+          : `<input data-agreement-extra-key="${esc(field.key)}" required>`}
+      </label>`).join("");
+    wrap.classList.toggle("hidden", fields.length === 0);
+  } catch (error) {
+    wrap.classList.remove("hidden");
+    list.innerHTML = `<p class="message error">Could not read the template fields: ${esc(error.message)}</p>`;
+  }
+}
+
+function replaceSecondScheduleWithPhotoReport(xml) {
+  const tables = Array.from(xml.getElementsByTagNameNS(WORD_NS, "tbl"));
+  const inventory = tables.find(table => {
+    const text = Array.from(table.getElementsByTagNameNS(WORD_NS, "t")).map(node => node.textContent).join(" ").toLowerCase();
+    return text.includes("condition / brand") && text.includes("photo ref.");
+  });
+  if (!inventory) return;
+  const rows = Array.from(inventory.getElementsByTagNameNS(WORD_NS, "tr"));
+  if (!rows.length) return;
+  const headings = ["Area / Room", "Photo Record", "Visible Condition", "Date Uploaded", "Notes"];
+  const headerCells = Array.from(rows[0].getElementsByTagNameNS(WORD_NS, "tc"));
+  headings.forEach((heading, index) => {
+    const textNodes = Array.from(headerCells[index]?.getElementsByTagNameNS(WORD_NS, "t") || []);
+    textNodes.forEach((textNode, nodeIndex) => { textNode.textContent = nodeIndex === 0 ? heading : ""; });
+  });
+  const areas = ["Entrance", "Living area", "Kitchen", "Bedroom 1", "Bedroom 2", "Bathroom", "Balcony", "Other"];
+  rows.slice(1).forEach((row, index) => {
+    const cells = Array.from(row.getElementsByTagNameNS(WORD_NS, "tc"));
+    cells.forEach((cell, cellIndex) => {
+      const textNodes = Array.from(cell.getElementsByTagNameNS(WORD_NS, "t"));
+      textNodes.forEach((node, nodeIndex) => { node.textContent = nodeIndex === 0 && cellIndex === 0 ? (areas[index] || "") : ""; });
+    });
+  });
+  replaceAgreementPhrase(xml, "LIST OF FITTINGS, FIXTURES AND INVENTORY", "ROOM CONDITION PHOTOS");
+  replaceAgreementPhrase(xml, "Both parties should jointly inspect the Said Premises at the commencement of the tenancy and complete this inventory together with photographs.", "Both parties should jointly inspect the Said Premises at handover and record dated photos by room or area in the Room Condition Photos section of this agreement.");
+  replaceAgreementPhrase(xml, "The condition of each item should be noted as \"Good\", \"Fair\", \"Damaged\" or similar, with remarks where necessary.", "Label each photo with its room or area and note any visible damage or wear where necessary.");
+  replaceAgreementPhrase(xml, "Additional rows may be added as required. Attach separate sheets if necessary.", "Upload additional photos for any other room or area in the app under this agreement.");
+  replaceAgreementPhrase(xml, "Both parties should sign and date this Second Schedule upon completion of the inventory check.", "Both parties should review and sign this Second Schedule after completing the room condition photo record.");
+  replaceAgreementPhrase(xml, "Always attach a completed inventory (Second Schedule) with dated photographs of the condition of the premises at handover. This is critical evidence for deposit deductions later.", "Complete the Second Schedule Room Condition Photos with dated photographs of each area at handover. This record supports later checks of the premises and deposit deductions.");
+  replaceAgreementPhrase(xml, "fixtures, fittings and appliances listed in the Second Schedule (if any)", "fixtures, fittings and appliances (if any) shown in the Second Schedule Room Condition Photos");
+  replaceAgreementPhrase(xml, "furnished with the fixtures and fittings (if any) as stated in the Second Schedule herein", "furnished with the fixtures and fittings (if any) shown in the Second Schedule Room Condition Photos");
+}
+
+async function createFilledWordDraft(templatePath, tenancyId) {
+  if (!window.JSZip) throw new Error("The Word document library did not load. Refresh the page and try again.");
+  const { data: templateBlob, error } = await db.storage.from(AGREEMENT_BUCKET).download(templatePath);
+  if (error) throw error;
+  const zip = await window.JSZip.loadAsync(templateBlob);
+  const context = agreementContext(tenancyId);
+  const supplemental = agreementSupplementalValues();
+  const replaceToken = agreementTokenReplacer(context, supplemental);
+  const extraValues = collectAgreementExtraValues();
+  const unresolved = new Set();
+  const xmlFiles = Object.keys(zip.files).filter(name => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/i.test(name));
+  for (const name of xmlFiles) {
+    const source = await zip.file(name).async("string");
+    const xml = new DOMParser().parseFromString(source, "application/xml");
+    if (xml.getElementsByTagName("parsererror").length) throw new Error(`Could not read the Word template section ${name}.`);
+    const paragraphs = Array.from(xml.getElementsByTagNameNS(WORD_NS, "p"));
+    paragraphs.forEach((paragraph, paragraphIndex) => {
+      const nodes = paragraphTextNodes(paragraph);
+      const text = nodes.map(node => node.textContent).join("");
+      const contextText = paragraphAgreementContext(paragraph);
+      const matches = Array.from(text.matchAll(/\{\{[^}]+\}\}|\[[^\]]+\]/g));
+      for (const match of matches.reverse()) {
+        const token = match[0];
+        const key = agreementTokenKey(name, paragraphIndex, match.index);
+        let value = replaceToken(token, contextText, text);
+        const inputKey = token.startsWith("{{") ? `token:${token}` : key;
+        if (value === token && extraValues.has(inputKey)) value = extraValues.get(inputKey) || (token.toLowerCase().includes("if multi-tier") ? "" : token);
+        if (value === token) {
+          if (!isAgreementInstructionToken(token)) unresolved.add(token);
+          continue;
+        }
+        replaceWordParagraphToken(nodes, match.index, match.index + token.length, value);
+      }
+    });
+    if (name === "word/document.xml") replaceSecondScheduleWithPhotoReport(xml);
+    if (name === "word/document.xml") {
+      const contacts = collectAgreementWitnessContacts();
+      replaceNthAgreementLabel(xml, "Witness Name", contacts.name);
+      replaceNthAgreementLabel(xml, "Witness NRIC", contacts.id_number);
+    }
+    zip.file(name, new XMLSerializer().serializeToString(xml));
+  }
+  const blob = await zip.generateAsync({ type: "blob", mimeType: AGREEMENT_DOCX_MIME });
+  return { blob, unresolved: Array.from(unresolved) };
+}
 
 function renderAgreements() {
   const container = $("agreements-list");
   if (!container) return;
-
   container.innerHTML = state.agreements.length
-    ? state.agreements.map(ag => {
-      const tenancy = state.tenancies.find(t => t.id === ag.tenancy_id);
-      const tenant = state.tenants.find(x => x.id === tenancy?.tenant_id);
-      const unit = state.units.find(u => u.id === tenancy?.unit_id);
-      const prop = state.properties.find(p => p.id === unit?.property_id);
-
-      const isSigned = ag.status === 'signed';
-
+    ? state.agreements.map(agreement => {
+      const tenancy = state.tenancies.find(item => item.id === agreement.tenancy_id);
+      const tenant = state.tenants.find(item => item.id === tenancy?.tenant_id);
+      const unit = state.units.find(item => item.id === tenancy?.unit_id);
+      const property = state.properties.find(item => item.id === unit?.property_id);
+      const isSigned = agreement.status === "signed";
+      const isWordDraft = String(agreement.agreement_text || "").startsWith("Word template draft:");
+      const landlordSignature = parseSavedSignature(agreement.landlord_signature);
+      const tenantSignature = parseSavedSignature(agreement.tenant_signature);
+      const witnessSignature = parseSavedSignature(agreement.witness_signature);
+      const agreementData = parseAgreementData(agreement);
+      const contacts = agreementData.contacts || {};
+      const witness = contacts.witness || contacts.landlord || contacts.tenant || {};
+      const searchable = [tenant?.tenant_name, property?.property_name, unit?.unit_name,
+        ...Object.values(witness)].filter(Boolean).join(" ").toLowerCase();
+      const contactSummary = witness.name
+        ? `${witness.name}${witness.agency_or_referral ? ` · ${witness.agency_or_referral}` : ""}${witness.phone ? ` · ${witness.phone}` : ""}`
+        : "";
+      const signatureStatus = isSigned
+        ? `Signed by ${landlordSignature.name || "landlord"}, ${tenantSignature.name || "tenant"}${witnessSignature.name ? ` and ${witnessSignature.name}` : ""}${agreement.signed_date ? ` · ${new Date(agreement.signed_date).toLocaleDateString()}` : ""}`
+        : "Draft ready · signing not started";
       return `
-        <article class="record-card">
-          <h3>Tenancy Agreement: ${esc(tenant?.tenant_name || "Tenant")} (${esc(prop?.property_name || "")})</h3>
+        <article class="record-card" data-agreement-search="${esc(searchable)}">
+          <h3>Tenancy Agreement: ${esc(tenant?.tenant_name || "Tenant")} (${esc(property?.property_name || "")}, ${esc(unit?.unit_name || "Unit")})</h3>
           <div class="record-meta">
-            <span class="pill" style="background:${isSigned ? '#dcfce7; color:#166534;' : '#fef9c3; color:#854d0e;'}">${esc(ag.status.toUpperCase())}</span>
+            <span class="pill">${esc(String(agreement.status || "draft").toUpperCase())}</span>
             <span class="pill">Monthly Rent: ${money(tenancy?.monthly_rent)}</span>
           </div>
-          <p><b>Signatures:</b> Landlord: ${esc(ag.landlord_signature || "Pending")} | Tenant: ${esc(ag.tenant_signature || "Pending")}</p>
-          <div style="background:#f8fafc; padding:12px; border-radius:6px; margin:10px 0; font-size:12px; white-space: pre-wrap; max-height:120px; overflow-y:auto;">${esc(ag.agreement_text)}</div>
+          <p><b>Signing:</b> ${esc(signatureStatus)}</p>
+          ${contactSummary ? `<p><b>Witness / agent / referral:</b> ${esc(contactSummary)}</p>` : ""}
+          <p>${esc(agreement.agreement_text || "Agreement draft")}</p>
           <div class="record-actions">
-            ${!isSigned ? `<button data-sign-agreement="${ag.id}">Sign & Execute</button>` : ''}
-            <button class="secondary" data-delete-agreement="${ag.id}">Delete</button>
+            ${isSigned ? `<button class="secondary" data-download-signed-agreement="${esc(agreement.id)}">Download signed agreement</button>` : ""}
+            ${isWordDraft ? `<button class="secondary" data-download-agreement="${esc(agreement.id)}">Download Word draft</button>` : ""}
+            ${isSigned ? `<button type="button" class="secondary" data-sign-agreement="${esc(agreement.id)}">View signatures</button>` : `<button type="button" class="secondary" data-sign-agreement="${esc(agreement.id)}">Sign agreement</button>`}
+            <button class="secondary" data-photos-agreement="${esc(agreement.id)}">Room condition photos</button>
+            <button class="secondary" data-delete-agreement="${esc(agreement.id)}">Delete</button>
           </div>
         </article>`;
     }).join("")
-    : '<div class="panel empty">No tenancy agreements generated yet. Click "+ Generate Agreement" to create one.</div>';
+    : '<div class="panel empty">No tenancy agreements yet. Upload your Word template, then create an agreement from a tenancy.</div>';
+  filterAgreementCards();
 }
 
-function openAgreementForm(tenancyId = "") {
+function filterAgreementCards() {
+  const query = ($("agreement-search")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("[data-agreement-search]").forEach(card => {
+    card.classList.toggle("hidden", query && !card.dataset.agreementSearch.includes(query));
+  });
+}
+
+function agreementPhotoRoot(userId, agreementId) {
+  return `${userId}/agreements/${agreementId}/photos`;
+}
+
+function safeAgreementPhotoArea(value) {
+  return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "other-area";
+}
+
+async function listAgreementPhotoPaths(agreementId) {
+  const userId = await currentUserId();
+  const root = agreementPhotoRoot(userId, agreementId);
+  const { data: areas, error: areaError } = await db.storage.from(AGREEMENT_BUCKET).list(root, { limit: 100 });
+  if (areaError) throw areaError;
+  const paths = [];
+  for (const area of (areas || []).filter(item => !item.id)) {
+    const { data: files, error } = await db.storage.from(AGREEMENT_BUCKET).list(`${root}/${area.name}`, { limit: 100 });
+    if (error) throw error;
+    (files || []).filter(file => file.id && file.name).forEach(file => paths.push(`${root}/${area.name}/${file.name}`));
+  }
+  return paths;
+}
+
+async function openAgreementPhotosPanel(agreementId) {
+  const agreement = state.agreements.find(item => item.id === agreementId);
+  if (!agreement) return;
+  const { tenant, unit, property } = agreementContext(agreement.tenancy_id);
+  $("agreement-photos-panel").dataset.agreementId = agreementId;
+  $("agreement-photos-info").textContent = `Photos for ${tenant?.tenant_name || "tenant"} · ${property?.property_name || "property"} / ${unit?.unit_name || "unit"}.`;
+  $("agreement-photo-form").reset();
+  $("agreement-photo-status").textContent = "";
+  $("signing-panel").classList.add("hidden");
+  $("agreement-photos-panel").classList.remove("hidden");
+  $("agreement-photos-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+  await loadAgreementPhotos(agreementId);
+}
+
+async function loadAgreementPhotos(agreementId) {
+  const grid = $("agreement-photos-grid");
+  if (!grid) return;
+  grid.innerHTML = '<p class="empty">Loading photos…</p>';
+  try {
+    const userId = await currentUserId();
+    const root = agreementPhotoRoot(userId, agreementId);
+    const { data: areas, error: areaError } = await db.storage.from(AGREEMENT_BUCKET).list(root, { limit: 100 });
+    if (areaError) throw areaError;
+    const cards = [];
+    for (const area of (areas || []).filter(item => !item.id)) {
+      const { data: files, error } = await db.storage.from(AGREEMENT_BUCKET).list(`${root}/${area.name}`, { limit: 100 });
+      if (error) throw error;
+      for (const file of (files || []).filter(item => item.id && item.name)) {
+        const path = `${root}/${area.name}/${file.name}`;
+        const { data: signed, error: signedError } = await db.storage.from(AGREEMENT_BUCKET).createSignedUrl(path, 3600);
+        if (signedError) throw signedError;
+        const areaLabel = area.name.replace(/-/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+        cards.push(`<article class="agreement-photo-card">
+          <a href="${esc(signed.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(signed.signedUrl)}" alt="${esc(areaLabel)} condition photo" loading="lazy"></a>
+          <div><strong>${esc(areaLabel)}</strong><small>${esc(file.name.replace(/^\d+_\d+_/, ""))}</small>
+            <button type="button" class="secondary" data-delete-agreement-photo="${esc(path)}">Remove photo</button></div>
+        </article>`);
+      }
+    }
+    grid.innerHTML = cards.length ? cards.join("") : '<p class="empty">No condition photos uploaded for this agreement yet.</p>';
+  } catch (error) {
+    grid.innerHTML = `<p class="message error">Could not load photos: ${esc(error.message)}</p>`;
+  }
+}
+
+async function uploadAgreementPhoto(event) {
+  event.preventDefault();
+  const agreementId = $("agreement-photos-panel").dataset.agreementId;
+  const area = $("agreement-photo-area").value.trim();
+  const files = Array.from($("agreement-photo-file").files || []);
+  if (!agreementId || !area || !files.length) return;
+  if (files.some(file => !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
+    message("agreement-photo-status", "Choose a JPG, PNG, or WebP photo.", "error");
+    return;
+  }
+  if (files.some(file => file.size > 20 * 1024 * 1024)) {
+    message("agreement-photo-status", "Each photo must be smaller than 20 MB.", "error");
+    return;
+  }
+  try {
+    const userId = await currentUserId();
+    const areaFolder = safeAgreementPhotoArea(area);
+    for (const [index, file] of files.entries()) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
+      const path = `${agreementPhotoRoot(userId, agreementId)}/${areaFolder}/${Date.now()}_${index}_${safeName}`;
+      const { error } = await db.storage.from(AGREEMENT_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+    }
+    $("agreement-photo-status").textContent = `${files.length} photo(s) uploaded under ${area}.`;
+    $("agreement-photo-file").value = "";
+    await loadAgreementPhotos(agreementId);
+  } catch (error) {
+    message("agreement-photo-status", agreementStorageError(error), "error");
+  }
+}
+
+async function deleteAgreementPhoto(path) {
+  if (!confirm("Remove this condition photo from the agreement?")) return;
+  try {
+    const { error } = await db.storage.from(AGREEMENT_BUCKET).remove([path]);
+    if (error) throw error;
+    await loadAgreementPhotos($("agreement-photos-panel").dataset.agreementId);
+  } catch (error) {
+    message("agreement-photo-status", error.message || "Photo could not be removed.", "error");
+  }
+}
+
+async function openAgreementForm(tenancyId = "") {
   if (!state.tenancies.length) {
     message("app-message", "Create a long-term tenancy first before generating agreements.", "error");
     return;
@@ -848,120 +1701,385 @@ function openAgreementForm(tenancyId = "") {
   populateSelects();
   $("agreement-form").reset();
   $("agreement-id").value = "";
-  
-  if (tenancyId) {
-    $("agreement-tenancy").value = tenancyId;
-    autofillAgreementTemplate(tenancyId);
-  }
-
+  $("agreement-renewal-enabled").checked = false;
+  if (tenancyId) $("agreement-tenancy").value = tenancyId;
+  await loadAgreementTemplateInfo();
+  await refreshAgreementExtraFields();
   $("agreement-form-wrap").classList.remove("hidden");
   $("agreement-form-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function autofillAgreementTemplate(tenancyId) {
-  const tenancy = state.tenancies.find(t => t.id === tenancyId);
-  if (!tenancy) return;
-  const tenant = state.tenants.find(x => x.id === tenancy.tenant_id);
-  const unit = state.units.find(u => u.id === tenancy.unit_id);
-  const prop = state.properties.find(p => p.id === unit?.property_id);
-
-  const defaultTemplate = `TENANCY AGREEMENT
---------------------------------------------------
-This Agreement is made between the Landlord and Tenant detailed below:
-
-1. PROPERTY DETAILS:
-Property Name: ${prop?.property_name || "N/A"}
-Address: ${prop?.address || "N/A"}, ${prop?.city || ""}
-Unit: ${unit?.unit_name || "N/A"}
-
-2. TENANT DETAILS:
-Name: ${tenant?.tenant_name || "N/A"}
-IC / Passport: ${tenant?.ic_or_passport || "N/A"}
-Contact: ${tenant?.phone || "N/A"} (${tenant?.email || "N/A"})
-
-3. TENANCY PERIOD & RENT:
-Start Date: ${tenancy.start_date}
-End Date: ${tenancy.end_date || "Open / Periodic"}
-Monthly Rental: RM ${Number(tenancy.monthly_rent).toFixed(2)} (Due on day ${tenancy.rent_due_day} of each calendar month)
-
-4. COVENANTS & CONDITIONS:
-- The Tenant shall punctually pay the monthly rent on or before the due date.
-- The Tenant shall maintain the interior condition of the premises in good tenantable repair.
-- The Landlord agrees to provide peaceful enjoyment of the property throughout the term.
---------------------------------------------------`;
-
-  $("agreement-text").value = defaultTemplate;
 }
 
 async function saveAgreement(event) {
   event.preventDefault();
   const tenancyId = $("agreement-tenancy").value;
-  const agreementText = $("agreement-text").value.trim();
-
-  const record = {
-    tenancy_id: tenancyId,
-    agreement_text: agreementText,
-    status: 'draft'
-  };
-
+  const template = state.agreementTemplate || await loadAgreementTemplateInfo();
+  if (!template) {
+    message("app-message", "Upload a Word agreement template before creating a draft.", "error");
+    return;
+  }
+  const missingSourceData = missingAgreementSourceData(tenancyId);
+  if (missingSourceData.length) {
+    message("agreement-autofill-summary", `Update the existing records first: ${missingSourceData.join("; ")}. Then create the agreement again.`, "error");
+    $("agreement-autofill-summary").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   try {
-    await runQuery(db.from("tenancy_agreements").insert(record).select().single());
+    const context = agreementContext(tenancyId);
+    const { blob, unresolved } = await createFilledWordDraft(template.path, tenancyId);
+    const supplemental = agreementSupplementalValues();
+    const formFields = Object.fromEntries(collectAgreementExtraValues());
+    const contacts = collectAgreementWitnessContacts();
+    const { data: created, error } = await db.from("tenancy_agreements").insert({
+      tenancy_id: tenancyId,
+      agreement_text: `Word template draft: ${template.name}. Complete the agreement details in the app and keep room condition photos with this tenancy agreement.`,
+      agreement_data: {
+        template_name: template.name,
+        created_at: new Date().toISOString(),
+        supplemental,
+        template_fields: formFields,
+        contacts
+      },
+      status: "draft"
+    }).select().single();
+    if (error) throw error;
+    const userId = await currentUserId();
+    const path = `${userId}/agreements/${created.id}/draft.docx`;
+    const { error: uploadError } = await db.storage.from(AGREEMENT_BUCKET).upload(path, blob, {
+      contentType: AGREEMENT_DOCX_MIME,
+      upsert: true
+    });
+    if (uploadError) {
+      await db.from("tenancy_agreements").delete().eq("id", created.id);
+      throw uploadError;
+    }
     $("agreement-form-wrap").classList.add("hidden");
     await loadAll();
+    const details = `${context.tenant?.tenant_name || "Tenant"} · ${context.property?.property_name || "Property"} / ${context.unit?.unit_name || "Unit"}`;
+    const warning = unresolved.length ? ` ${unresolved.length} bracketed template field(s) still need review.` : "";
+    message("app-message", `Word draft created for ${details}.${warning}`, unresolved.length ? "" : "success");
   } catch (error) {
     reportError(error);
   }
 }
 
-let activeSigningAgreementId = null;
+async function downloadAgreementFile(agreementId, kind) {
+  try {
+    const userId = await currentUserId();
+    const path = `${userId}/agreements/${agreementId}/${kind}.docx`;
+    let { data, error } = await db.storage.from(AGREEMENT_BUCKET).download(path);
+    if (error && kind === "signed") {
+      const agreement = state.agreements.find(item => item.id === agreementId);
+      const signatures = {
+        landlord: parseSavedSignature(agreement?.landlord_signature),
+        tenant: parseSavedSignature(agreement?.tenant_signature),
+        witness: parseSavedSignature(agreement?.witness_signature)
+      };
+      if (!signatures.landlord.image || !signatures.tenant.image || !signatures.witness.image) {
+        throw new Error("This older agreement has no saved signature images to place in its Word file. Its stored signature record is still available to view.");
+      }
+      const signedAt = agreement.signed_date || new Date().toISOString();
+      data = await createSignedAgreementDocx(agreementId, signatures, signedAt);
+      const { error: uploadError } = await db.storage.from(AGREEMENT_BUCKET).upload(path, data, {
+        contentType: AGREEMENT_DOCX_MIME,
+        upsert: true
+      });
+      if (uploadError) throw uploadError;
+    } else if (error) {
+      throw error;
+    }
+    const url = URL.createObjectURL(data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `tenancy-agreement-${kind}-${agreementId}.docx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    reportError(error);
+  }
+}
+
+function downloadAgreementDraft(agreementId) {
+  return downloadAgreementFile(agreementId, "draft");
+}
+
+function downloadSignedAgreement(agreementId) {
+  return downloadAgreementFile(agreementId, "signed");
+}
 
 function openSigningPanel(agreementId) {
-  const ag = state.agreements.find(x => x.id === agreementId);
-  if (!ag) return;
-  activeSigningAgreementId = agreementId;
-
-  const tenancy = state.tenancies.find(t => t.id === ag.tenancy_id);
-  const tenant = state.tenants.find(x => x.id === tenancy?.tenant_id);
-
-  $("signing-info").textContent = `Signing agreement for Tenant: ${tenant?.tenant_name || "Tenant"}. Type full legal names below to execute digital signature.`;
-  $("landlord-sig-input").value = ag.landlord_signature || "";
-  $("tenant-sig-input").value = ag.tenant_signature || "";
-  
+  const agreement = state.agreements.find(item => String(item.id) === String(agreementId));
+  if (!agreement) return;
+  $("agreement-photos-panel").classList.add("hidden");
+  setupSignaturePads();
+  let context = {};
+  let contextError = "";
+  try {
+    context = agreementContext(agreement.tenancy_id);
+  } catch (error) {
+    contextError = error.message || "The linked tenancy could not be loaded.";
+  }
+  const { tenant, owner } = context;
+  const landlordSignature = parseSavedSignature(agreement.landlord_signature);
+  const tenantSignature = parseSavedSignature(agreement.tenant_signature);
+  const witnessSignature = parseSavedSignature(agreement.witness_signature);
+  const savedContacts = parseAgreementData(agreement).contacts || {};
+  const witnessContact = savedContacts.witness || savedContacts.landlord || savedContacts.tenant || {};
+  $("landlord-sign-name").value = landlordSignature.name || owner?.owner_name || "";
+  $("tenant-sign-name").value = tenantSignature.name || tenant?.tenant_name || "";
+  $("witness-sign-name").value = witnessSignature.name || witnessContact.name || "";
+  restoreSignature("landlord", landlordSignature.image);
+  restoreSignature("tenant", tenantSignature.image);
+  restoreSignature("witness", witnessSignature.image);
+  const readOnly = agreement.status === "signed";
+  ["landlord", "tenant", "witness"].forEach(party => {
+    $(`${party}-sign-name`).readOnly = readOnly;
+    $(`${party}-sign-pad`).dataset.readonly = String(readOnly);
+    document.querySelector(`[data-clear-signature="${party}"]`)?.classList.toggle("hidden", readOnly);
+  });
+  $("save-signatures-button").classList.toggle("hidden", readOnly);
+  $("signature-message").textContent = readOnly
+    ? `Saved on ${agreement.signed_date ? new Date(agreement.signed_date).toLocaleDateString() : "the recorded signing date"}. These signatures are read-only.`
+    : "The landlord, tenant, and witness must sign before this agreement can be finalized.";
+  $("signing-panel").dataset.agreementId = agreementId;
+  $("signing-info").textContent = contextError
+    ? `${contextError} You can still review this signing form; check that this agreement is linked to an existing tenancy.`
+    : readOnly
+      ? "Saved signatures for this tenancy agreement."
+      : `Landlord: ${owner?.owner_name || "Landlord"} · Tenant: ${tenant?.tenant_name || "Tenant"} · Witness: ${witnessContact.name || "Witness"}. All three can sign below.`;
   $("signing-panel").classList.remove("hidden");
   $("signing-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function executeSignAgreement() {
-  if (!activeSigningAgreementId) return;
-  const landlordSig = $("landlord-sig-input").value.trim();
-  const tenantSig = $("tenant-sig-input").value.trim();
+function signatureImageBytes(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1];
+  if (!base64) throw new Error("A saved signature image is missing.");
+  const binary = atob(base64);
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
 
-  if (!landlordSig || !tenantSig) {
-    alert("Both Landlord and Tenant signature inputs are required to finalize signing.");
-    return;
+function wordElement(xml, namespace, qualifiedName, attributes = {}) {
+  const element = xml.createElementNS(namespace, qualifiedName);
+  Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, String(value)));
+  return element;
+}
+
+function appendWordText(xml, paragraph, text, options = {}) {
+  const run = wordElement(xml, WORD_NS, "w:r");
+  if (options.fontSize) {
+    const properties = wordElement(xml, WORD_NS, "w:rPr");
+    properties.appendChild(wordElement(xml, WORD_NS, "w:sz", { "w:val": options.fontSize }));
+    run.appendChild(properties);
+  }
+  const textNode = wordElement(xml, WORD_NS, "w:t");
+  textNode.textContent = text;
+  textNode.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve");
+  run.appendChild(textNode);
+  paragraph.appendChild(run);
+}
+
+function appendWordSignatureImage(xml, paragraph, relationshipId, party, imageId) {
+  const ns = {
+    wp: "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+    a: "http://schemas.openxmlformats.org/drawingml/2006/main",
+    pic: "http://schemas.openxmlformats.org/drawingml/2006/picture",
+    r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    xmlns: "http://www.w3.org/2000/xmlns/"
+  };
+  const width = 1645920; // 1.8 inches in EMUs
+  const height = 685800; // 0.75 inches; matches the signature pad's aspect ratio
+  const run = wordElement(xml, WORD_NS, "w:r");
+  const drawing = wordElement(xml, WORD_NS, "w:drawing");
+  drawing.setAttributeNS(ns.xmlns, "xmlns:wp", ns.wp);
+  drawing.setAttributeNS(ns.xmlns, "xmlns:a", ns.a);
+  drawing.setAttributeNS(ns.xmlns, "xmlns:pic", ns.pic);
+  drawing.setAttributeNS(ns.xmlns, "xmlns:r", ns.r);
+
+  const inline = wordElement(xml, ns.wp, "wp:inline", { distT: 0, distB: 0, distL: 0, distR: 0 });
+  inline.appendChild(wordElement(xml, ns.wp, "wp:extent", { cx: width, cy: height }));
+  inline.appendChild(wordElement(xml, ns.wp, "wp:effectExtent", { l: 0, t: 0, r: 0, b: 0 }));
+  inline.appendChild(wordElement(xml, ns.wp, "wp:docPr", { id: 900000 + imageId, name: `${party} signature`, descr: `${party} handwritten signature` }));
+  const frame = wordElement(xml, ns.wp, "wp:cNvGraphicFramePr");
+  frame.appendChild(wordElement(xml, ns.a, "a:graphicFrameLocks", { noChangeAspect: 1 }));
+  inline.appendChild(frame);
+
+  const graphic = wordElement(xml, ns.a, "a:graphic");
+  const graphicData = wordElement(xml, ns.a, "a:graphicData", { uri: ns.pic });
+  const picture = wordElement(xml, ns.pic, "pic:pic");
+  const nonVisual = wordElement(xml, ns.pic, "pic:nvPicPr");
+  nonVisual.appendChild(wordElement(xml, ns.pic, "pic:cNvPr", { id: imageId, name: `${party}-signature.png` }));
+  nonVisual.appendChild(wordElement(xml, ns.pic, "pic:cNvPicPr"));
+  picture.appendChild(nonVisual);
+
+  const fill = wordElement(xml, ns.pic, "pic:blipFill");
+  const blip = wordElement(xml, ns.a, "a:blip");
+  blip.setAttributeNS(ns.r, "r:embed", relationshipId);
+  fill.appendChild(blip);
+  const stretch = wordElement(xml, ns.a, "a:stretch");
+  stretch.appendChild(wordElement(xml, ns.a, "a:fillRect"));
+  fill.appendChild(stretch);
+  picture.appendChild(fill);
+
+  const shape = wordElement(xml, ns.pic, "pic:spPr");
+  const transform = wordElement(xml, ns.a, "a:xfrm");
+  transform.appendChild(wordElement(xml, ns.a, "a:off", { x: 0, y: 0 }));
+  transform.appendChild(wordElement(xml, ns.a, "a:ext", { cx: width, cy: height }));
+  shape.appendChild(transform);
+  const geometry = wordElement(xml, ns.a, "a:prstGeom", { prst: "rect" });
+  geometry.appendChild(wordElement(xml, ns.a, "a:avLst"));
+  shape.appendChild(geometry);
+  picture.appendChild(shape);
+  graphicData.appendChild(picture);
+  graphic.appendChild(graphicData);
+  inline.appendChild(graphic);
+  drawing.appendChild(inline);
+  run.appendChild(drawing);
+  paragraph.appendChild(run);
+}
+
+async function createSignedAgreementDocx(agreementId, signatures, signedAt) {
+  if (!window.JSZip) throw new Error("The Word document library did not load. Refresh the page and try again.");
+  const userId = await currentUserId();
+  const draftPath = `${userId}/agreements/${agreementId}/draft.docx`;
+  const { data: draft, error: downloadError } = await db.storage.from(AGREEMENT_BUCKET).download(draftPath);
+  if (downloadError) throw downloadError;
+  const zip = await window.JSZip.loadAsync(draft);
+  const documentFile = zip.file("word/document.xml");
+  if (!documentFile) throw new Error("The agreement Word file is missing its main document content.");
+  const xml = new DOMParser().parseFromString(await documentFile.async("string"), "application/xml");
+  if (xml.getElementsByTagName("parsererror").length) throw new Error("The agreement Word file could not be read.");
+
+  const packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+  const officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+  const relsPath = "word/_rels/document.xml.rels";
+  const relsFile = zip.file(relsPath);
+  if (!relsFile) throw new Error("The agreement Word file is missing its document relationships.");
+  const relsXml = new DOMParser().parseFromString(await relsFile.async("string"), "application/xml");
+  const relsRoot = relsXml.documentElement;
+  let nextRel = Array.from(relsRoot.getElementsByTagNameNS(packageRelNs, "Relationship"))
+    .reduce((highest, relationship) => Math.max(highest, Number((relationship.getAttribute("Id") || "").replace(/^rId/, "")) || 0), 0) + 1;
+  const relationships = {};
+
+  const contentFile = zip.file("[Content_Types].xml");
+  if (!contentFile) throw new Error("The agreement Word file is missing its content type definitions.");
+  const contentXml = new DOMParser().parseFromString(await contentFile.async("string"), "application/xml");
+  const hasPngType = Array.from(contentXml.getElementsByTagNameNS(contentTypeNs, "Default"))
+    .some(item => item.getAttribute("Extension").toLowerCase() === "png");
+  if (!hasPngType) {
+    const pngType = contentXml.createElementNS(contentTypeNs, "Default");
+    pngType.setAttribute("Extension", "png");
+    pngType.setAttribute("ContentType", "image/png");
+    contentXml.documentElement.appendChild(pngType);
   }
 
-  const updates = {
-    landlord_signature: landlordSig,
-    tenant_signature: tenantSig,
-    status: 'signed',
-    signed_date: new Date().toISOString()
-  };
+  const signatureTargets = [
+    { party: "landlord", marker: "Signature:", excludes: ["Company Chop", "Witness"] },
+    { party: "tenant", marker: "Signature / Company Chop:" },
+    { party: "witness", marker: "Witness Signature:" }
+  ];
+  const paragraphs = Array.from(xml.getElementsByTagNameNS(WORD_NS, "p"));
+  const dateText = new Date(signedAt).toLocaleDateString("en-MY");
+  for (let index = 0; index < signatureTargets.length; index++) {
+    const target = signatureTargets[index];
+    const paragraph = paragraphs.find(item => {
+      const text = Array.from(item.getElementsByTagNameNS(WORD_NS, "t")).map(node => node.textContent || "").join("");
+      return text.includes(target.marker) && !(target.excludes || []).some(excluded => text.includes(excluded));
+    });
+    if (!paragraph) throw new Error(`The Word template needs a signature line labelled "${target.marker}" for the ${target.party}.`);
 
+    const relationshipId = `rId${nextRel++}`;
+    const imageName = `signature-${target.party}.png`;
+    const relationship = relsXml.createElementNS(packageRelNs, "Relationship");
+    relationship.setAttribute("Id", relationshipId);
+    relationship.setAttribute("Type", `${officeRelNs}/image`);
+    relationship.setAttribute("Target", `media/${imageName}`);
+    relsRoot.appendChild(relationship);
+    relationships[target.party] = relationshipId;
+    zip.file(`word/media/${imageName}`, signatureImageBytes(signatures[target.party].image));
+
+    const properties = Array.from(paragraph.childNodes).find(node => node.namespaceURI === WORD_NS && node.localName === "pPr");
+    Array.from(paragraph.childNodes).forEach(node => {
+      if (node !== properties) paragraph.removeChild(node);
+    });
+    if (properties && properties.parentNode !== paragraph) paragraph.insertBefore(properties, paragraph.firstChild);
+    appendWordText(xml, paragraph, `${target.party === "witness" ? "Witness signature: " : `${target.party === "tenant" ? "Signature / Company Chop: " : "Signature: "}`}`);
+    appendWordSignatureImage(xml, paragraph, relationships[target.party], target.party, 900001 + index);
+
+    const dateParagraph = xml.createElementNS(WORD_NS, "w:p");
+    appendWordText(xml, dateParagraph, `Signed on: ${dateText}`, { fontSize: 18 });
+    paragraph.parentNode.insertBefore(dateParagraph, paragraph.nextSibling);
+  }
+
+  zip.file("word/document.xml", new XMLSerializer().serializeToString(xml));
+  zip.file(relsPath, new XMLSerializer().serializeToString(relsXml));
+  zip.file("[Content_Types].xml", new XMLSerializer().serializeToString(contentXml));
+  return zip.generateAsync({ type: "blob", mimeType: AGREEMENT_DOCX_MIME });
+}
+
+async function saveAgreementSignatures(event) {
+  event.preventDefault();
+  const agreementId = $("signing-panel").dataset.agreementId;
+  if (!agreementId) return;
+  if (!signaturePads.landlord?.hasInk || !signaturePads.tenant?.hasInk || !signaturePads.witness?.hasInk) {
+    message("signature-message", "The landlord, tenant, and witness each need to add a signature before saving.", "error");
+    return;
+  }
+  const landlordName = $("landlord-sign-name").value.trim();
+  const tenantName = $("tenant-sign-name").value.trim();
+  const witnessName = $("witness-sign-name").value.trim();
+  if (!landlordName || !tenantName || !witnessName) {
+    message("signature-message", "Enter the landlord, tenant, and witness full names before saving.", "error");
+    return;
+  }
   try {
-    await runQuery(db.from("tenancy_agreements").update(updates).eq("id", activeSigningAgreementId).select().single());
+    const signedAt = new Date().toISOString();
+    const signatures = {
+      landlord: { name: landlordName, image: signaturePads.landlord.canvas.toDataURL("image/png") },
+      tenant: { name: tenantName, image: signaturePads.tenant.canvas.toDataURL("image/png") },
+      witness: { name: witnessName, image: signaturePads.witness.canvas.toDataURL("image/png") }
+    };
+    const signedDocument = await createSignedAgreementDocx(agreementId, signatures, signedAt);
+    const userId = await currentUserId();
+    const signedPath = `${userId}/agreements/${agreementId}/signed.docx`;
+    const { error: uploadError } = await db.storage.from(AGREEMENT_BUCKET).upload(signedPath, signedDocument, {
+      contentType: AGREEMENT_DOCX_MIME,
+      upsert: true
+    });
+    if (uploadError) throw uploadError;
+
+    const { error: updateError } = await db.from("tenancy_agreements").update({
+      status: "signed",
+      signed_date: signedAt,
+      landlord_signature: JSON.stringify(signatures.landlord),
+      tenant_signature: JSON.stringify(signatures.tenant),
+      witness_signature: JSON.stringify(signatures.witness)
+    }).eq("id", agreementId);
+    if (updateError) {
+      const { error: cleanupError } = await db.storage.from(AGREEMENT_BUCKET).remove([signedPath]);
+      if (cleanupError) console.warn("Could not remove the unreferenced signed agreement file:", cleanupError);
+      throw updateError;
+    }
     $("signing-panel").classList.add("hidden");
-    activeSigningAgreementId = null;
     await loadAll();
-    message("app-message", "Tenancy agreement successfully signed and stored!", "success");
+    message("app-message", "The signed Word agreement is saved with the tenancy record and ready to download.", "success");
   } catch (error) {
     reportError(error);
   }
 }
 
 async function deleteAgreement(id) {
-  if (!confirm("Delete this agreement record?")) return;
+  if (!confirm("Delete this agreement record, its saved draft, and its signatures?")) return;
   try {
+    const userId = await currentUserId();
+    const photoPaths = await listAgreementPhotoPaths(id);
+    const { error: storageError } = await db.storage.from(AGREEMENT_BUCKET).remove([
+      `${userId}/agreements/${id}/draft.docx`,
+      `${userId}/agreements/${id}/signed.docx`,
+      ...photoPaths
+    ]);
+    if (storageError) throw storageError;
     await runQuery(db.from("tenancy_agreements").delete().eq("id", id));
     await loadAll();
   } catch (error) {
@@ -1067,26 +2185,62 @@ async function deleteBooking(id) {
 /* ---------------- DEPOSITS ---------------- */
 
 function renderDeposits() {
-  $("deposits-list").innerHTML = state.deposits.length
-    ? state.deposits.map(d => {
-      const tenancy = state.tenancies.find(t => t.id === d.tenancy_id);
-      const tenant = state.tenants.find(t => t.id === tenancy?.tenant_id);
-      return `
-        <article class="record-card">
-          <h3>${esc(tenant?.tenant_name || "Unknown")} — ${esc(d.deposit_type)}</h3>
-          <div class="record-meta">
-            <span class="pill">${esc(d.status)}</span>
-            <span class="pill">${money(d.amount)}</span>
-          </div>
-          <p>Paid: ${esc(d.paid_date || "—")} | Refunded: ${esc(d.refunded_date || "—")}</p>
-          <p>${esc(d.notes || "")}</p>
-          <div class="record-actions">
-            <button data-edit-deposit="${d.id}">Edit</button>
-            <button class="secondary" data-delete-deposit="${d.id}">Delete</button>
-          </div>
-        </article>`;
-    }).join("")
-    : '<div class="panel empty">No deposits recorded yet.</div>';
+  const rows = state.tenancies.map(tenancy => {
+    const unit = state.units.find(item => item.id === tenancy.unit_id);
+    const property = state.properties.find(item => item.id === unit?.property_id);
+    const tenant = state.tenants.find(item => item.id === tenancy.tenant_id);
+    return { tenancy, unit, property, tenant, deposits: state.deposits.filter(item => item.tenancy_id === tenancy.id) };
+  }).sort((a, b) => (a.tenant?.tenant_name || "").localeCompare(b.tenant?.tenant_name || ""));
+
+  const depositEntries = (deposits, type) => {
+    const matching = deposits.filter(item => item.deposit_type === type);
+    if (!matching.length) return '<span class="deposit-missing">Not recorded</span>';
+    return matching.map(item => `
+      <div class="deposit-table-entry">
+        <div class="deposit-entry-heading"><strong>${money(item.amount)}</strong><span class="pill">${esc(item.status || "held")}</span></div>
+        <small>Paid ${esc(item.paid_date || "—")} · Refunded ${esc(item.refunded_date || "—")}</small>
+        ${item.notes ? `<small>${esc(item.notes)}</small>` : ""}
+        <div class="deposit-entry-actions">
+          <button class="secondary" data-edit-deposit="${esc(item.id)}">Edit</button>
+          <button class="secondary" data-delete-deposit="${esc(item.id)}">Delete</button>
+        </div>
+      </div>`).join("");
+  };
+
+  $("deposits-list").innerHTML = rows.length
+    ? `<div class="deposit-table-wrap"><table class="deposit-table">
+        <thead><tr><th>Tenant / tenancy</th><th>Security deposit</th><th>Utility deposit</th><th>Other deposits</th></tr></thead>
+        <tbody>${rows.map(({ tenancy, unit, property, tenant, deposits }) => {
+          const searchable = [tenant?.tenant_name, property?.property_name, unit?.unit_name, tenancy.status,
+            tenancy.monthly_rent, ...deposits.flatMap(item => [item.deposit_type, item.status, item.amount, item.notes])]
+            .filter(Boolean).join(" ").toLowerCase();
+          const otherTypes = [...new Set(deposits.map(item => item.deposit_type).filter(type => !["security", "utility"].includes(type)))];
+          const otherContent = otherTypes.length
+            ? otherTypes.map(type => `<div class="deposit-other-group"><strong>${esc(type)}</strong>${depositEntries(deposits, type)}</div>`).join("")
+            : '<span class="deposit-missing">—</span>';
+          return `<tr class="deposit-table-row" data-deposit-search="${esc(searchable)}">
+            <td><strong>${esc(tenant?.tenant_name || "Unknown tenant")}</strong><small>${esc(property?.property_name || "Unknown property")} · ${esc(unit?.unit_name || "Unknown unit")}</small><small>${esc(tenancy.status || "")} · Rent ${money(tenancy.monthly_rent)} / month</small></td>
+            <td>${depositEntries(deposits, "security")}</td>
+            <td>${depositEntries(deposits, "utility")}</td>
+            <td>${otherContent}</td>
+          </tr>`;
+        }).join("")}
+        <tr id="deposit-no-results" class="hidden"><td colspan="4" class="deposit-no-results">No deposits match your search.</td></tr></tbody>
+      </table></div>`
+    : '<div class="panel empty">No long-term tenancies yet. Add a tenancy before recording deposits.</div>';
+  filterDepositRows();
+}
+
+function filterDepositRows() {
+  const query = ($("deposit-search")?.value || "").trim().toLowerCase();
+  const rows = [...document.querySelectorAll(".deposit-table-row")];
+  let visible = 0;
+  rows.forEach(row => {
+    const matches = !query || (row.dataset.depositSearch || "").includes(query);
+    row.classList.toggle("hidden", !matches);
+    if (matches) visible++;
+  });
+  $("deposit-no-results")?.classList.toggle("hidden", !rows.length || visible > 0);
 }
 
 function resetDepositForm() {
@@ -1118,6 +2272,113 @@ function openDepositForm(id = "") {
   }
   $("deposit-form-wrap").classList.remove("hidden");
   $("deposit-form-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+const DEPOSIT_PACKAGES = {
+  "1.5": { securityMonths: 1, utilityMonths: 0.5 },
+  "2.5": { securityMonths: 2, utilityMonths: 0.5 },
+  "3": { securityMonths: 2, utilityMonths: 1 }
+};
+
+function updateDepositPackagePreview() {
+  const tenancy = state.tenancies.find(item => item.id === $("deposit-package-tenancy")?.value);
+  const packagePlan = DEPOSIT_PACKAGES[$("deposit-package-type")?.value];
+  const preview = $("deposit-package-preview");
+  if (!preview) return;
+  if (!tenancy || !packagePlan) {
+    preview.textContent = "Select a tenancy and package to see the security and utility amounts.";
+    return;
+  }
+  const rent = Number(tenancy.monthly_rent);
+  if (!Number.isFinite(rent) || rent <= 0) {
+    preview.textContent = "This tenancy has no valid monthly rent. Edit the tenancy first, then choose a package.";
+    return;
+  }
+  const security = Math.round(rent * packagePlan.securityMonths * 100) / 100;
+  const utility = Math.round(rent * packagePlan.utilityMonths * 100) / 100;
+  preview.textContent = `Monthly rent ${money(rent)} → Security ${money(security)} + Utility ${money(utility)}.`;
+}
+
+function openDepositPackageForm() {
+  if (!state.tenancies.length) {
+    message("app-message", "Create a long-term tenancy first.", "error");
+    return;
+  }
+  $("deposit-package-form").reset();
+  populateSelects();
+  updateDepositPackagePreview();
+  $("deposit-package-form-wrap").classList.remove("hidden");
+  $("deposit-package-form-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function saveDepositPackage(event) {
+  event.preventDefault();
+  const tenancyId = $("deposit-package-tenancy").value;
+  const tenancy = state.tenancies.find(item => item.id === tenancyId);
+  const packagePlan = DEPOSIT_PACKAGES[$("deposit-package-type").value];
+  if (!tenancy || !packagePlan) {
+    message("app-message", "Select a tenancy and deposit package.", "error");
+    return;
+  }
+  const rent = Number(tenancy.monthly_rent);
+  if (!Number.isFinite(rent) || rent <= 0) {
+    message("app-message", "This tenancy has no valid monthly rent. Edit the tenancy before adding its deposit package.", "error");
+    return;
+  }
+
+  const amounts = {
+    security: Math.round(rent * packagePlan.securityMonths * 100) / 100,
+    utility: Math.round(rent * packagePlan.utilityMonths * 100) / 100
+  };
+  const activeStatuses = new Set(["held", "partially_refunded"]);
+  const changes = [];
+  const inserts = [];
+  for (const [type, amount] of Object.entries(amounts)) {
+    const existing = state.deposits.filter(item =>
+      item.tenancy_id === tenancyId && item.deposit_type === type && activeStatuses.has(item.status)
+    );
+    if (existing.length > 1) {
+      message("app-message", `More than one active ${type} deposit exists for this tenancy. Review those records first, then add the package.`, "error");
+      return;
+    }
+    if (existing.length === 1) {
+      if (Math.round(Number(existing[0].amount) * 100) !== Math.round(amount * 100)) {
+        if (existing[0].status === "partially_refunded") {
+          message("app-message", `The ${type} deposit is partially refunded, so its original amount was left unchanged. Review it manually before applying a package.`, "error");
+          return;
+        }
+        changes.push({ id: existing[0].id, type, oldAmount: Number(existing[0].amount), amount });
+      }
+    } else {
+      inserts.push({
+        tenancy_id: tenancyId,
+        deposit_type: type,
+        amount,
+        paid_date: null,
+        refunded_date: null,
+        status: "held",
+        notes: `Created from ${$("deposit-package-type").value}-month rent deposit package.`
+      });
+    }
+  }
+
+  if (changes.length) {
+    const summary = changes.map(change => `${change.type}: ${money(change.oldAmount)} → ${money(change.amount)}`).join("\n");
+    if (!confirm(`This tenancy already has active deposits with different amounts. Update them to match the selected package?\n\n${summary}`)) return;
+  }
+
+  try {
+    for (const change of changes) {
+      await runQuery(db.from("deposits").update({ amount: change.amount }).eq("id", change.id));
+    }
+    if (inserts.length) await runQuery(db.from("deposits").insert(inserts).select());
+    $("deposit-package-form").reset();
+    $("deposit-package-form-wrap").classList.add("hidden");
+    await loadAll();
+    message("app-message", "Security and utility deposits saved from the selected rent package.", "success");
+  } catch (error) {
+    reportError(error);
+  }
 }
 
 async function saveDeposit(event) {
@@ -1545,6 +2806,7 @@ async function deleteMaintenance(id) {
 
 function navigate(page) {
   state.page = page;
+  if (page === "agreements") loadAgreementTemplateInfo();
 
   document.querySelectorAll(".page").forEach(el => el.classList.add("hidden"));
 
@@ -1596,6 +2858,10 @@ function navigate(page) {
 /* ---------------- EVENT HANDLERS ---------------- */
 
 function bindEvents() {
+  document.querySelectorAll("[data-list-search]").forEach(input => {
+    input.addEventListener("input", () => filterCompactRecordList(input.dataset.listSearch));
+  });
+
   $("auth-form").addEventListener("submit", signIn);
   $("signup-button").addEventListener("click", signUp);
   $("logout-button").addEventListener("click", logout);
@@ -1616,8 +2882,14 @@ function bindEvents() {
   });
   $("cancel-property")?.addEventListener("click", resetPropertyForm);
   $("property-form")?.addEventListener("submit", saveProperty);
-  $("property-search")?.addEventListener("input", renderProperties);
-  $("property-filter")?.addEventListener("change", renderProperties);
+  $("property-search")?.addEventListener("input", () => {
+    renderProperties();
+    formatCompactRecordLists();
+  });
+  $("property-filter")?.addEventListener("change", () => {
+    renderProperties();
+    formatCompactRecordLists();
+  });
 
   $("properties-list")?.addEventListener("click", event => {
     const edit = event.target.closest("[data-edit-property]");
@@ -1681,8 +2953,13 @@ function bindEvents() {
 
   $("tenants-list")?.addEventListener("click", event => {
     const edit = event.target.closest("[data-edit-tenant]");
+    const addTenancy = event.target.closest("[data-add-tenancy-for]");
     const del = event.target.closest("[data-delete-tenant]");
     if (edit) editTenant(edit.dataset.editTenant);
+    if (addTenancy) {
+      navigate("tenancies");
+      openTenancyForm("", addTenancy.dataset.addTenancyFor);
+    }
     if (del) deleteTenant(del.dataset.deleteTenant);
   });
 
@@ -1706,17 +2983,43 @@ function bindEvents() {
   // Tenancy Agreements & Digital Signing
   $("new-agreement-button")?.addEventListener("click", () => openAgreementForm());
   $("cancel-agreement")?.addEventListener("click", () => $("agreement-form-wrap").classList.add("hidden"));
-  $("agreement-tenancy")?.addEventListener("change", (e) => autofillAgreementTemplate(e.target.value));
+  $("agreement-template-form")?.addEventListener("submit", uploadAgreementTemplate);
   $("agreement-form")?.addEventListener("submit", saveAgreement);
+  $("agreement-tenancy")?.addEventListener("change", refreshAgreementExtraFields);
+  $("agreement-renewal-enabled")?.addEventListener("change", refreshAgreementExtraFields);
+  $("agreement-sign-form")?.addEventListener("submit", saveAgreementSignatures);
+  $("agreement-photo-form")?.addEventListener("submit", uploadAgreementPhoto);
+  $("close-agreement-photos")?.addEventListener("click", () => $("agreement-photos-panel").classList.add("hidden"));
+  $("agreement-photos-grid")?.addEventListener("click", event => {
+    const remove = event.target.closest("[data-delete-agreement-photo]");
+    if (remove) deleteAgreementPhoto(remove.dataset.deleteAgreementPhoto);
+  });
+  document.querySelectorAll("[data-clear-signature]").forEach(button => {
+    button.addEventListener("click", () => clearSignature(button.dataset.clearSignature));
+  });
 
   $("agreements-list")?.addEventListener("click", event => {
-    const signBtn = event.target.closest("[data-sign-agreement]");
-    const delBtn = event.target.closest("[data-delete-agreement]");
-    if (signBtn) openSigningPanel(signBtn.dataset.signAgreement);
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const signBtn = target.closest("[data-sign-agreement]");
+    const downloadBtn = target.closest("[data-download-agreement]");
+    const signedDownloadBtn = target.closest("[data-download-signed-agreement]");
+    const photosBtn = target.closest("[data-photos-agreement]");
+    const delBtn = target.closest("[data-delete-agreement]");
+    if (signBtn) {
+      event.preventDefault();
+      try {
+        openSigningPanel(signBtn.dataset.signAgreement);
+      } catch (error) {
+        reportError(error);
+      }
+    }
+    if (downloadBtn) downloadAgreementDraft(downloadBtn.dataset.downloadAgreement);
+    if (signedDownloadBtn) downloadSignedAgreement(signedDownloadBtn.dataset.downloadSignedAgreement);
+    if (photosBtn) openAgreementPhotosPanel(photosBtn.dataset.photosAgreement);
     if (delBtn) deleteAgreement(delBtn.dataset.deleteAgreement);
   });
 
-  $("execute-sign-btn")?.addEventListener("click", executeSignAgreement);
   $("cancel-sign-btn")?.addEventListener("click", () => $("signing-panel").classList.add("hidden"));
 
   // Short-term Bookings
@@ -1733,6 +3036,12 @@ function bindEvents() {
 
   // Deposits
   $("new-deposit-button")?.addEventListener("click", () => openDepositForm());
+  $("new-deposit-package-button")?.addEventListener("click", openDepositPackageForm);
+  $("cancel-deposit-package")?.addEventListener("click", () => $("deposit-package-form-wrap").classList.add("hidden"));
+  $("deposit-package-form")?.addEventListener("submit", saveDepositPackage);
+  $("deposit-package-tenancy")?.addEventListener("change", updateDepositPackagePreview);
+  $("deposit-package-type")?.addEventListener("change", updateDepositPackagePreview);
+  $("deposit-search")?.addEventListener("input", filterDepositRows);
   $("cancel-deposit")?.addEventListener("click", resetDepositForm);
   $("deposit-form")?.addEventListener("submit", saveDeposit);
 

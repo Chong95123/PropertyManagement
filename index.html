@@ -6,6 +6,7 @@
   <title>Property Management | Product D</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -178,7 +179,10 @@
             </div>
           </form>
         </div>
-        <div id="finance-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search finance by property, type, reference or notes
+          <input type="search" data-list-search="finance-list" placeholder="Property, income/expense, reference…">
+        </label>
+        <div id="finance-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- SUB-PAGES -->
@@ -190,7 +194,7 @@
           <button id="new-property-button">+ Add property</button>
         </div>
         <div class="toolbar">
-          <input id="property-search" placeholder="Search name, address or city">
+          <input id="property-search" data-list-search="properties-list" placeholder="Search name, address or city">
           <select id="property-filter">
             <option value="">All management types</option>
             <option value="owned">Owned</option>
@@ -236,7 +240,7 @@
             </div>
           </form>
         </div>
-        <div id="properties-list" class="record-list"></div>
+        <div id="properties-list" class="record-list compact-record-list"></div>
 
         <div class="section-heading unit-heading">
           <div><h2>Rentable units</h2><p>Whole properties, rooms and other units.</p></div>
@@ -276,7 +280,10 @@
             </div>
           </form>
         </div>
-        <div id="units-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search units by name, property, type or status
+          <input type="search" data-list-search="units-list" placeholder="Unit, property, type…">
+        </label>
+        <div id="units-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- OWNERS SUB-PAGE -->
@@ -296,9 +303,12 @@
                 <option value="company">Company</option>
               </select>
             </label>
+            <label>NRIC / passport<input id="owner-identity-number"></label>
             <label>Phone<input id="owner-phone" type="tel"></label>
             <label>Email<input id="owner-email" type="email"></label>
             <label class="wide">Mailing address<input id="owner-address"></label>
+            <label>Bank name<input id="owner-bank-name"></label>
+            <label>Bank account number<input id="owner-bank-account"></label>
             <label class="wide">Notes<textarea id="owner-notes" rows="3"></textarea></label>
             <div class="form-actions wide">
               <button type="submit">Save owner</button>
@@ -306,7 +316,10 @@
             </div>
           </form>
         </div>
-        <div id="owners-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search owners by name, phone, email or address
+          <input type="search" data-list-search="owners-list" placeholder="Owner, phone, email…">
+        </label>
+        <div id="owners-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- OWNERSHIP LINKS SUB-PAGE -->
@@ -333,7 +346,10 @@
             </div>
           </form>
         </div>
-        <div id="links-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search owner links by owner, property or relationship
+          <input type="search" data-list-search="links-list" placeholder="Owner, property, relationship…">
+        </label>
+        <div id="links-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- TENANTS SUB-PAGE -->
@@ -364,7 +380,10 @@
             </div>
           </form>
         </div>
-        <div id="tenants-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search tenants by name, phone, email or ID
+          <input type="search" data-list-search="tenants-list" placeholder="Tenant, phone, email, ID…">
+        </label>
+        <div id="tenants-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- LONG-TERM TENANCIES SUB-PAGE -->
@@ -403,7 +422,10 @@
             </div>
           </form>
         </div>
-        <div id="tenancies-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search tenancies by tenant, property, unit or status
+          <input type="search" data-list-search="tenancies-list" placeholder="Tenant, property, unit, status…">
+        </label>
+        <div id="tenancies-list" class="record-list compact-record-list"></div>
       </section>
 
 
@@ -450,53 +472,114 @@
             </div>
           </form>
         </div>
-        <div id="maintenance-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search repairs by issue, tenant, property or status
+          <input type="search" data-list-search="maintenance-list" placeholder="Issue, tenant, property, status…">
+        </label>
+        <div id="maintenance-list" class="record-list compact-record-list"></div>
       </section>
 
 
       <!-- TENANCY AGREEMENTS & DIGITAL SIGNING SUB-PAGE -->
       <section id="agreements-page" class="page hidden">
         <div class="section-heading">
-          <div><h2>Tenancy Agreements</h2><p>Auto-fill lease contracts, preview terms, and collect digital signatures from Landlord & Tenant.</p></div>
-          <button id="new-agreement-button">+ Generate Agreement</button>
+          <div><h2>Tenancy Agreements</h2><p>Build agreements from saved owner, tenant, property, tenancy, and deposit details; collect three signatures and keep room condition photos together.</p></div>
+          <button id="new-agreement-button">+ Create agreement</button>
         </div>
+
+        <div class="panel agreement-template-panel">
+          <div>
+            <h3>Word agreement template</h3>
+            <p>Upload your .docx master once. Each new version is kept separately; the app fills the details and changes the inventory schedule to a room photo report in generated drafts.</p>
+          </div>
+          <form id="agreement-template-form" class="agreement-template-form">
+            <label>Choose Word file (.docx)
+              <input id="agreement-template-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required>
+            </label>
+            <button type="submit">Upload template version</button>
+          </form>
+          <p id="agreement-template-status" class="message" aria-live="polite">Checking for a template…</p>
+        </div>
+
         <div id="agreement-form-wrap" class="panel hidden">
-          <h3 id="agreement-form-title">Generate Tenancy Agreement</h3>
+          <h3 id="agreement-form-title">Create Tenancy Agreement</h3>
+          <p class="form-help">Owner, tenant, property, rent and dates are copied from their existing records. Only details not already saved in the app will need attention here.</p>
           <form id="agreement-form" class="form-grid">
             <input type="hidden" id="agreement-id">
-            <label class="wide">Select Tenancy *
-              <select id="agreement-tenancy" required></select>
-            </label>
-            <label class="wide">Agreement Clauses & Content *
-              <textarea id="agreement-text" rows="10" required></textarea>
-            </label>
+            <label class="wide">Select Tenancy *<select id="agreement-tenancy" required></select></label>
+            <p id="agreement-autofill-summary" class="form-help wide"></p>
+            <label class="wide agreement-renewal-toggle"><input id="agreement-renewal-enabled" type="checkbox"> Add a renewal option (leave unticked if extensions will use a new agreement)</label>
+            <fieldset class="wide agreement-contact-group">
+              <legend>Witness / agent / referral contact</legend>
+              <div class="form-grid">
+                <label>Full name *<input id="agreement-witness-name" autocomplete="name" required></label>
+                <label>NRIC / passport *<input id="agreement-witness-id" required></label>
+                <label>Phone<input id="agreement-witness-phone" type="tel" autocomplete="tel"></label>
+                <label>Email<input id="agreement-witness-email" type="email" autocomplete="email"></label>
+                <label>Agency / referral source<input id="agreement-witness-agency"></label>
+              </div>
+            </fieldset>
+            <div id="agreement-extra-fields" class="wide agreement-extra-fields hidden">
+              <h4>Other details from the template</h4>
+              <p class="form-help">Complete these remaining items here. They will be filled into the Word draft, so you do not need to edit and upload it again.</p>
+              <div id="agreement-extra-fields-list" class="agreement-extra-fields-list"></div>
+            </div>
             <div class="form-actions wide">
-              <button type="submit">Save Agreement Draft</button>
+              <button type="submit">Create Word draft</button>
               <button type="button" id="cancel-agreement" class="secondary">Cancel</button>
             </div>
           </form>
         </div>
 
-
-        <!-- Signing Modal / Panel overlay -->
-        <div id="signing-panel" class="panel hidden" style="border: 2px solid var(--blue); margin-bottom: 24px;">
-          <h3>Digital Signature Execution</h3>
-          <p id="signing-info" style="margin-bottom: 12px; color: var(--muted);"></p>
-          <div class="form-grid">
-            <label>Landlord Signature (Full Name)
-              <input id="landlord-sig-input" placeholder="Type Landlord Name as Signature">
-            </label>
-            <label>Tenant Signature (Full Name)
-              <input id="tenant-sig-input" placeholder="Type Tenant Name as Signature">
-            </label>
-          </div>
-          <div class="form-actions" style="margin-top: 16px;">
-            <button type="button" id="execute-sign-btn">Sign & Finalize Agreement</button>
-            <button type="button" id="cancel-sign-btn" class="secondary">Close</button>
-          </div>
+        <div id="signing-panel" class="panel hidden agreement-signing-panel">
+          <h3>Sign tenancy agreement</h3>
+          <p id="signing-info">The landlord, tenant, and one witness can sign below. Their signatures and signing date will be saved with this agreement in the app.</p>
+          <p class="form-help">After the landlord, tenant, and witness sign, the app inserts their signatures into the Word agreement and saves a signed copy.</p>
+          <form id="agreement-sign-form">
+            <div class="signature-grid">
+              <section class="signature-entry">
+                <label>Landlord full name<input id="landlord-sign-name" autocomplete="name" required></label>
+                <label>Landlord signature</label>
+                <canvas id="landlord-sign-pad" class="signature-pad" aria-label="Landlord signature pad"></canvas>
+                <button type="button" class="secondary clear-signature" data-clear-signature="landlord">Clear landlord signature</button>
+              </section>
+              <section class="signature-entry">
+                <label>Tenant full name<input id="tenant-sign-name" autocomplete="name" required></label>
+                <label>Tenant signature</label>
+                <canvas id="tenant-sign-pad" class="signature-pad" aria-label="Tenant signature pad"></canvas>
+                <button type="button" class="secondary clear-signature" data-clear-signature="tenant">Clear tenant signature</button>
+              </section>
+              <section class="signature-entry">
+                <label>Witness full name<input id="witness-sign-name" autocomplete="name" required></label>
+                <label>Witness signature</label>
+                <canvas id="witness-sign-pad" class="signature-pad" aria-label="Witness signature pad"></canvas>
+                <button type="button" class="secondary clear-signature" data-clear-signature="witness">Clear witness signature</button>
+              </section>
+            </div>
+            <p id="signature-message" class="message" aria-live="polite"></p>
+            <div class="form-actions">
+              <button type="submit" id="save-signatures-button">Save all signatures</button>
+            </div>
+          </form>
+          <button type="button" id="cancel-sign-btn" class="secondary">Close</button>
         </div>
 
-        <div id="agreements-list" class="record-list"></div>
+        <div id="agreement-photos-panel" class="panel hidden agreement-photos-panel">
+          <h3>Room condition photos</h3>
+          <p id="agreement-photos-info" class="form-help">Upload photos for each room or area. They are kept with this tenancy agreement.</p>
+          <form id="agreement-photo-form" class="agreement-template-form">
+            <label>Room or area<input id="agreement-photo-area" placeholder="Living room, kitchen, bedroom 1…" required></label>
+            <label>Photos<input id="agreement-photo-file" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+            <button type="submit">Upload photo</button>
+          </form>
+          <p id="agreement-photo-status" class="message" aria-live="polite"></p>
+          <div id="agreement-photos-grid" class="agreement-photos-grid"></div>
+          <button type="button" id="close-agreement-photos" class="secondary">Close photos</button>
+        </div>
+
+        <label class="agreement-search">Search agreements, witnesses, agents, or referrals
+          <input id="agreement-search" data-list-search="agreements-list" type="search" placeholder="Name, phone, email, agency, property…">
+        </label>
+        <div id="agreements-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- SHORT-TERM BOOKINGS SUB-PAGE -->
@@ -533,14 +616,40 @@
             </div>
           </form>
         </div>
-        <div id="bookings-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search bookings by guest, unit, property or date
+          <input type="search" data-list-search="bookings-list" placeholder="Guest, unit, property, date…">
+        </label>
+        <div id="bookings-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- DEPOSITS SUB-PAGE -->
       <section id="deposits-page" class="page hidden">
         <div class="section-heading">
           <div><h2>Deposits</h2><p>Security and other deposits linked to tenancies.</p></div>
-          <button id="new-deposit-button">+ Add deposit</button>
+          <div class="button-row">
+            <button id="new-deposit-package-button" class="secondary">+ Add deposit package</button>
+            <button id="new-deposit-button">+ Add deposit</button>
+          </div>
+        </div>
+        <div id="deposit-package-form-wrap" class="panel hidden">
+          <h3>Add security + utility deposits together</h3>
+          <p>Choose the tenancy and total package. The app calculates both amounts from the monthly rent.</p>
+          <form id="deposit-package-form" class="form-grid">
+            <label class="wide">Tenancy *<select id="deposit-package-tenancy" required></select></label>
+            <label class="wide">Total deposit package *
+              <select id="deposit-package-type" required>
+                <option value="">Select package</option>
+                <option value="1.5">1.5 months — 1 month security + 0.5 month utility</option>
+                <option value="2.5">2.5 months — 2 months security + 0.5 month utility</option>
+                <option value="3">3 months — 2 months security + 1 month utility</option>
+              </select>
+            </label>
+            <p id="deposit-package-preview" class="wide deposit-package-preview">Select a tenancy and package to see the security and utility amounts.</p>
+            <div class="form-actions wide">
+              <button type="submit">Save both deposits</button>
+              <button type="button" id="cancel-deposit-package" class="secondary">Cancel</button>
+            </div>
+          </form>
         </div>
         <div id="deposit-form-wrap" class="panel hidden">
           <h3 id="deposit-form-title">Add deposit</h3>
@@ -574,7 +683,10 @@
             </div>
           </form>
         </div>
-        <div id="deposits-list" class="record-list"></div>
+        <label class="agreement-search">Search deposits by tenant, property, unit, type or notes
+          <input id="deposit-search" type="search" placeholder="Tenant, property, unit, status…">
+        </label>
+        <div id="deposits-list"></div>
       </section>
 
       <!-- SALES SUB-PAGE (Inside Finance section) -->
@@ -607,7 +719,10 @@
             </div>
           </form>
         </div>
-        <div id="sales-list" class="record-list"></div>
+        <label class="agreement-search compact-record-search">Search sales by property, status or buyer notes
+          <input type="search" data-list-search="sales-list" placeholder="Property, status, buyer…">
+        </label>
+        <div id="sales-list" class="record-list compact-record-list"></div>
       </section>
 
       <!-- REPORTS & DOCUMENTS PAGE -->
